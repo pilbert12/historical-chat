@@ -543,6 +543,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             # Split response and suggestions
             parts = response_text.split('[SUGGESTION]')
             main_response = parts[0].strip()
+            suggestions = [s.strip() for s in parts[1:] if s.strip()]
             
             # Clean up formatting artifacts
             main_response = re.sub(r'PART \d:', '', main_response)
@@ -558,8 +559,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             for level in range(1, 4):
                 main_response = re.sub(
                     f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: create_wiki_link(m.group(1), 
-                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                    lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{"primary" if level == 1 else "secondary" if level == 2 else "tertiary"}">{m.group(1)}</a>',
                     main_response
                 )
             
@@ -567,13 +567,10 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
             
-            # Add suggestions as hidden div
-            suggestions_html = ""
-            for suggestion in parts[1:]:
-                if suggestion.strip():
-                    suggestions_html += f"[SUGGESTION]{suggestion.strip()}\n"
+            # Store suggestions in session state
+            st.session_state.suggestions = suggestions
             
-            return f'<div>{main_response}{suggestions_html}</div>'
+            return f'<div>{main_response}</div>'
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
@@ -638,6 +635,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         # Split response and suggestions
         parts = response_text.split('[SUGGESTION]')
         main_response = parts[0].strip()
+        suggestions = [s.strip() for s in parts[1:] if s.strip()]
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -653,8 +651,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         for level in range(1, 4):
             main_response = re.sub(
                 f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: create_wiki_link(m.group(1), 
-                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{"primary" if level == 1 else "secondary" if level == 2 else "tertiary"}">{m.group(1)}</a>',
                 main_response
             )
         
@@ -662,13 +659,10 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
-        # Add suggestions as hidden div
-        suggestions_html = ""
-        for suggestion in parts[1:]:
-            if suggestion.strip():
-                suggestions_html += f"[SUGGESTION]{suggestion.strip()}\n"
+        # Store suggestions in session state
+        st.session_state.suggestions = suggestions
         
-        return f'<div>{main_response}{suggestions_html}</div>'
+        return f'<div>{main_response}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
