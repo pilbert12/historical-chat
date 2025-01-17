@@ -22,10 +22,6 @@ if 'current_conversation_id' not in st.session_state:
     st.session_state.current_conversation_id = None
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-if 'suggestions' not in st.session_state:
-    st.session_state.suggestions = []
-if 'wiki_references' not in st.session_state:
-    st.session_state.wiki_references = []
 
 def save_api_keys():
     """Save API keys to user's profile."""
@@ -54,7 +50,7 @@ def get_user_conversations():
         db.close()
 
 def extract_suggestions(message_content):
-    """Extract suggestions from an assistant message."""
+    """Extract suggestions from a message."""
     parts = message_content.split('[SUGGESTION]')
     return [s.strip() for s in parts[1:] if s.strip()]
 
@@ -509,13 +505,6 @@ def get_ai_response(prompt, wiki_content):
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
-def extract_suggestions(response_text):
-    """Extract suggestions from a formatted response."""
-    # Remove HTML wrapper if present
-    response_text = re.sub(r'<div>(.*?)</div>', r'\1', response_text)
-    parts = response_text.split('[SUGGESTION]')
-    return [s.strip() for s in parts[1:] if s.strip()]
-
 def get_deepseek_response(prompt, wiki_content):
     """Get response from Deepseek API with follow-up suggestions."""
     try:
@@ -857,34 +846,29 @@ for idx, message in enumerate(st.session_state.messages):
             st.markdown(message["content"], unsafe_allow_html=True)
         
         # Show suggestion buttons only for the most recent assistant message
-        if (message["role"] == "assistant" and 
-            idx == len(st.session_state.messages) - 1 and 
-            st.session_state.suggestions):
-            cols = st.columns(len(st.session_state.suggestions))
-            for i, (col, suggestion) in enumerate(zip(cols, st.session_state.suggestions)):
-                # Clean up the suggestion text
-                clean_suggestion = suggestion.strip()
-                # Remove importance markers and clean up text
-                clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_suggestion)
-                clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
-                # Use a unique key combining message index and suggestion index
-                button_key = f"suggestion_{idx}_{i}"
-                if col.button(clean_suggestion, key=button_key):
-                    # Add user message
-                    st.session_state.messages.append({"role": "user", "content": clean_suggestion})
-                    save_conversation()  # Save after user message
-                    
-                    # Get and add AI response
-                    wiki_content = get_wikipedia_content(clean_suggestion)
-                    if wiki_content:
-                        response = get_ai_response(clean_suggestion, wiki_content)
-                    else:
-                        response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    # Extract suggestions from the new response
-                    st.session_state.suggestions = extract_suggestions(response)
-                    save_conversation()  # Save after AI response
-                    st.rerun()
+        if message["role"] == "assistant" and idx == len(st.session_state.messages) - 1:
+            suggestions = extract_suggestions(message["content"])
+            if suggestions:
+                cols = st.columns(len(suggestions))
+                for i, (col, suggestion) in enumerate(zip(cols, suggestions)):
+                    # Clean up the suggestion text
+                    clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
+                    clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
+                    # Use a unique key combining message index and suggestion index
+                    button_key = f"suggestion_{idx}_{i}"
+                    if col.button(clean_suggestion, key=button_key):
+                        st.session_state.messages.append({"role": "user", "content": clean_suggestion})
+                        save_conversation()  # Save after user message
+                        
+                        # Get and add AI response
+                        wiki_content = get_wikipedia_content(clean_suggestion)
+                        if wiki_content:
+                            response = get_ai_response(clean_suggestion, wiki_content)
+                        else:
+                            response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
+                        st.session_state.messages.append({"role": "assistant", "content": response})
+                        save_conversation()  # Save after AI response
+                        st.rerun()
 
 # Chat input
 if prompt := st.chat_input("What would you like to know about history?"):
