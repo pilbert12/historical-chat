@@ -446,27 +446,34 @@ def get_groq_response(prompt, wiki_content):
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""Context from Wikipedia: {wiki_content}
+        full_prompt = f"""You are a knowledgeable historical chatbot. Provide a detailed response about the following topic.
+        
+Context from Wikipedia: {wiki_content}
 {conversation_context}
 Current Question: {prompt}
 
-Respond in two parts:
+Your response should:
+1. Be detailed and informative
+2. Mark important terms using these markers:
+   - [1][term] for major historical figures, key events, and primary concepts
+   - [2][term] for dates, places, and technical terms
+   - [3][term] for related concepts and supporting details
+3. End with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
-
-PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
-
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+Guidelines:
+- Mark terms exactly once with the most appropriate importance level
+- Ensure natural flow without section headers
+- Make follow-up questions conversational and build upon both current topic and previous context
+- Format suggestions clearly with [SUGGESTION] prefix
+- Do not include any markdown formatting or URLs
+- Keep responses focused and well-structured"""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
+                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics. Always mark important terms with [1][term], [2][term], or [3][term] based on their significance."
                 },
                 {
                     "role": "user",
@@ -478,7 +485,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             top_p=1
         )
         
-        response_text = completion.choices[0].message.content
+        response_text = completion.choices[0].message.content.strip()
         
         # Split response and suggestions
         parts = response_text.split('[SUGGESTION]')
@@ -490,6 +497,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
         main_response = re.sub(r'\d\. ', '', main_response)
         main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+        main_response = re.sub(r'Guidelines:', '', main_response)
+        main_response = re.sub(r'Your response should:', '', main_response)
         
         # Process the main response
         main_response = re.sub(r'https?://\S+', '', main_response)
@@ -511,7 +520,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         # Store suggestions in session state
         if 'suggestions' not in st.session_state:
             st.session_state.suggestions = []
-        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
+        st.session_state.suggestions = [s.strip() for s in suggestions if s.strip()][:3]
         
         return f'<div>{main_response}</div>'
     except Exception as e:
