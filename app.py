@@ -577,9 +577,17 @@ Keep your response natural and flowing. Do not overuse importance markers - only
                 st.session_state.suggestions = []
             st.session_state.suggestions = suggestions[:3]
             
-            # If we don't have enough suggestions, generate some based on the content
+            # If we don't have enough suggestions, generate some based on found articles
+            if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
+                article_titles = list(st.session_state['last_wiki_articles'].keys())
+                while len(st.session_state.suggestions) < 3 and article_titles:
+                    title = random.choice(article_titles)
+                    st.session_state.suggestions.append(f"Tell me more about {title}")
+                    article_titles.remove(title)
+            
+            # If still not enough suggestions, add generic ones
             while len(st.session_state.suggestions) < 3:
-                st.session_state.suggestions.append(f"Tell me more about {random.choice(relevant_snippets)}")
+                st.session_state.suggestions.append("What other historical inventions were significant during this period?")
             
             # Clean up formatting artifacts
             main_response = re.sub(r'PART \d:', '', main_response)
@@ -587,7 +595,7 @@ Keep your response natural and flowing. Do not overuse importance markers - only
             main_response = re.sub(r'\d\. ', '', main_response)
             main_response = re.sub(r'Follow-Up Questions:', '', main_response)
             
-            # Process the main response
+            # Process URLs
             main_response = re.sub(r'https?://\S+', '', main_response)
             main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
             
@@ -696,9 +704,17 @@ Keep your response natural and flowing, without section headers or numbering. Fo
             st.session_state.suggestions = []
         st.session_state.suggestions = suggestions[:3]
         
-        # If we don't have enough suggestions, generate some based on the content
+        # If we don't have enough suggestions, generate some based on found articles
+        if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
+            article_titles = list(st.session_state['last_wiki_articles'].keys())
+            while len(st.session_state.suggestions) < 3 and article_titles:
+                title = random.choice(article_titles)
+                st.session_state.suggestions.append(f"Tell me more about {title}")
+                article_titles.remove(title)
+        
+        # If still not enough suggestions, add generic ones
         while len(st.session_state.suggestions) < 3:
-            st.session_state.suggestions.append(f"Tell me more about {random.choice(relevant_snippets)}")
+            st.session_state.suggestions.append("What other historical inventions were significant during this period?")
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -706,7 +722,7 @@ Keep your response natural and flowing, without section headers or numbering. Fo
         main_response = re.sub(r'\d\. ', '', main_response)
         main_response = re.sub(r'Follow-Up Questions:', '', main_response)
         
-        # Process the main response
+        # Process URLs
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
