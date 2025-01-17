@@ -634,7 +634,7 @@ for idx, message in enumerate(st.session_state.messages):
                     else:
                         response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
                     st.session_state.messages.append({"role": "assistant", "content": response})
-                    st.experimental_rerun()
+                    st.rerun()
 
 # Chat input
 if prompt := st.chat_input("What would you like to know about history?"):
@@ -650,4 +650,4 @@ if prompt := st.chat_input("What would you like to know about history?"):
         response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
-    st.experimental_rerun() 
+    st.rerun() 
