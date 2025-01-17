@@ -561,10 +561,22 @@ def get_ai_response(prompt, wiki_content):
         
         # Get additional wiki content for key terms if needed
         additional_content = []
+        sources = []  # Track Wikipedia sources
+        
+        # Process main wiki content source if available
+        if wiki_content and "From article '" in wiki_content:
+            sources.append(wiki_content.split("From article '")[1].split("'")[0])
+        
+        # Get additional content and track sources
         for term in key_terms:
             if term.lower() not in wiki_content.lower():
                 extra_content = get_wikipedia_content(term)
                 if extra_content:
+                    # Extract source from the content
+                    if "From article '" in extra_content:
+                        source = extra_content.split("From article '")[1].split("'")[0]
+                        if source not in sources:
+                            sources.append(source)
                     additional_content.append(extra_content)
         
         # Combine all wiki content
@@ -572,13 +584,35 @@ def get_ai_response(prompt, wiki_content):
         if additional_content:
             full_wiki_content += "\n\nAdditional relevant information:\n" + "\n\n".join(additional_content)
         
+        # Add sources to the wiki content
+        if sources:
+            source_list = "\n\nSources:\n" + "\n".join(f"- {source}" for source in sources)
+            full_wiki_content += source_list
+        
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
+        # Get the response
         if model_choice == "Deepseek (Requires API Key)":
-            return get_deepseek_response(prompt, full_wiki_content)
+            response = get_deepseek_response(prompt, full_wiki_content)
         else:
-            return get_groq_response(prompt, full_wiki_content)
+            response = get_groq_response(prompt, full_wiki_content)
+            
+        # Add sources to the response if we have them
+        if sources:
+            sources_html = '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.9em; color: rgba(255, 255, 255, 0.5);">'
+            sources_html += '<strong>Wikipedia Sources:</strong><br>'
+            sources_html += '<br>'.join(f'• <a href="https://en.wikipedia.org/wiki/{source.replace(" ", "_")}" target="_blank">{source}</a>' for source in sources)
+            sources_html += '</div>'
+            
+            # Add sources to the response while preserving any existing HTML
+            if response.endswith('</div>'):
+                response = response[:-6] + sources_html + '</div>'
+            else:
+                response += sources_html
+                
+        return response
+            
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
