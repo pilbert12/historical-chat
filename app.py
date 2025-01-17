@@ -573,7 +573,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
                 if suggestion.strip():
                     suggestions_html += f"[SUGGESTION]{suggestion.strip()}\n"
             
-            return f'<div>{main_response}<div style="display:none">{suggestions_html}</div></div>'
+            return f'<div>{main_response}{suggestions_html}</div>'
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
@@ -668,7 +668,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             if suggestion.strip():
                 suggestions_html += f"[SUGGESTION]{suggestion.strip()}\n"
         
-        return f'<div>{main_response}<div style="display:none">{suggestions_html}</div></div>'
+        return f'<div>{main_response}{suggestions_html}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
