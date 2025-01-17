@@ -672,17 +672,23 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
+        # Track processed terms to avoid duplicates
+        processed_terms = set()
+        
+        def process_term(match):
+            term = match.group(1).strip()
+            if term.lower() in processed_terms:
+                return term  # Return term without markup if already processed
+            processed_terms.add(term.lower())
+            importance = 'primary' if match.group(0).startswith('[1]') else 'secondary' if match.group(0).startswith('[2]') else 'tertiary'
+            return create_wiki_link(term, importance)
+        
         # Process importance markers in main response
-        for level in range(1, 4):
-            main_response = re.sub(
-                f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: create_wiki_link(m.group(1), 
-                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                main_response
-            )
+        main_response = re.sub(r'\[(\d)\]\[([^\]]+?)\](?:\s+\[\d\]\[\2\])?', lambda m: process_term(m), main_response)
         
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
+        main_response = re.sub(r'\s*([.,!?])', r'\1', main_response)  # Fix spacing around punctuation
         main_response = main_response.strip()
         
         # Store suggestions in session state
