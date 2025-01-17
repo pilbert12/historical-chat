@@ -842,6 +842,9 @@ for idx, message in enumerate(st.session_state.messages):
                 clean_suggestion = re.sub(r'\[.*?\]', '', clean_suggestion)
                 clean_suggestion = re.sub(r'\d+\.\s*', '', clean_suggestion)
                 clean_suggestion = re.sub(r'[{}]', '', clean_suggestion)
+                clean_suggestion = re.sub(r'\s*-\s*$', '', clean_suggestion)  # Remove trailing dashes
+                clean_suggestion = re.sub(r'\s+-\s+', ' ', clean_suggestion)  # Remove dashes between words
+                clean_suggestion = re.sub(r'^\s*-\s*', '', clean_suggestion)  # Remove leading dashes
                 clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
                 clean_suggestion = clean_suggestion.strip()
                 # Use a unique key combining message index and suggestion index
