@@ -22,6 +22,10 @@ if 'current_conversation_id' not in st.session_state:
     st.session_state.current_conversation_id = None
 if 'messages' not in st.session_state:
     st.session_state.messages = []
+if 'suggestions' not in st.session_state:
+    st.session_state.suggestions = []
+if 'wiki_references' not in st.session_state:
+    st.session_state.wiki_references = []
 
 def save_api_keys():
     """Save API keys to user's profile."""
@@ -49,11 +53,6 @@ def get_user_conversations():
     finally:
         db.close()
 
-def extract_suggestions(message_content):
-    """Extract suggestions from a message."""
-    parts = message_content.split('[SUGGESTION]')
-    return [s.strip() for s in parts[1:] if s.strip()]
-
 def load_conversation(conv_id):
     """Load a specific conversation."""
     db = get_db_session()
@@ -62,6 +61,7 @@ def load_conversation(conv_id):
         if conv and conv.user_id == st.session_state.user_id:
             st.session_state.messages = conv.messages or []
             st.session_state.current_conversation_id = conv_id
+            st.session_state.suggestions = []
     finally:
         db.close()
 
@@ -70,6 +70,7 @@ def create_new_conversation():
     if st.session_state.messages:
         save_conversation()
     st.session_state.messages = []
+    st.session_state.suggestions = []
     st.session_state.current_conversation_id = None
 
 def save_conversation():
@@ -472,19 +473,6 @@ def get_wikipedia_content(query):
         st.error(f"Error searching Wikipedia: {str(e)}")
         return None
 
-def get_ai_response(prompt, wiki_content):
-    """Get response from selected AI model with follow-up suggestions."""
-    try:
-        # Get model choice from session state
-        model_choice = st.session_state.get('model_choice', "Groq (Free)")
-        
-        if model_choice == "Deepseek (Requires API Key)":
-            return get_deepseek_response(prompt, wiki_content)
-        else:
-            return get_groq_response(prompt, wiki_content)
-    except Exception as e:
-        return f"Error communicating with AI model: {str(e)}"
-
 def get_deepseek_response(prompt, wiki_content):
     """Get response from Deepseek API with follow-up suggestions."""
     try:
@@ -505,10 +493,12 @@ def get_deepseek_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
+            # Get last few exchanges, but limit to keep context manageable
+            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
+                # Clean up any HTML/markdown from previous responses
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
@@ -559,7 +549,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             for level in range(1, 4):
                 main_response = re.sub(
                     f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}">{m.group(1)}</a>',
+                    lambda m: create_wiki_link(m.group(1), 
+                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
                     main_response
                 )
             
@@ -568,9 +559,11 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = main_response.strip()
             
             # Store suggestions in session state
-            st.session_state.suggestions = suggestions
+            if 'suggestions' not in st.session_state:
+                st.session_state.suggestions = []
+            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
             
-            return main_response
+            return f'<div>{main_response}</div>'
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
@@ -598,27 +591,43 @@ def get_groq_response(prompt, wiki_content):
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""Context from Wikipedia: {wiki_content}
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response about the following topic, with careful attention to marking important terms.
+
+Context from Wikipedia: {wiki_content}
 {conversation_context}
 Current Question: {prompt}
 
-Respond in two parts:
+CRITICAL FORMATTING REQUIREMENTS:
+1. You MUST mark ALL important terms using these exact markers:
+   - Use [1][term] for major historical figures (e.g., [1][Julius Caesar]), key events (e.g., [1][Battle of Waterloo]), and primary concepts
+   - Use [2][term] for dates (e.g., [2][44 BC]), places (e.g., [2][Roman Empire]), and technical terms
+   - Use [3][term] for supporting concepts and contextual details
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
+2. Example of properly marked text:
+"[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics] during the campaign."
 
-PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
+3. Follow these marking rules strictly:
+   - Mark EVERY important term - aim for at least 2-3 terms per sentence
+   - Use [1] for the most important 25% of terms
+   - Use [2] for the next 50% of terms
+   - Use [3] for the remaining 25% of terms
+   - Never mark the same term twice
+   - Always include the full term in the brackets
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+
+Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
+                    "content": """You are a knowledgeable historical chatbot. Your primary task is to mark important terms with the correct importance level:
+- [1][term] for major figures and primary concepts (25% of terms)
+- [2][term] for dates, places, and technical terms (50% of terms)
+- [3][term] for supporting details (25% of terms)
+Mark EVERY important term, and ensure proper hierarchy through your marking."""
                 },
                 {
                     "role": "user",
@@ -651,7 +660,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         for level in range(1, 4):
             main_response = re.sub(
                 f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}">{m.group(1)}</a>',
+                lambda m: create_wiki_link(m.group(1), 
+                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
                 main_response
             )
         
@@ -660,11 +670,26 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = main_response.strip()
         
         # Store suggestions in session state
-        st.session_state.suggestions = suggestions
+        if 'suggestions' not in st.session_state:
+            st.session_state.suggestions = []
+        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
         
-        return main_response
+        return f'<div>{main_response}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
+
+def get_ai_response(prompt, wiki_content):
+    """Get response from selected AI model with follow-up suggestions."""
+    try:
+        # Get model choice from session state
+        model_choice = st.session_state.get('model_choice', "Groq (Free)")
+        
+        if model_choice == "Deepseek (Requires API Key)":
+            return get_deepseek_response(prompt, wiki_content)
+        else:
+            return get_groq_response(prompt, wiki_content)
+    except Exception as e:
+        return f"Error communicating with AI model: {str(e)}"
 
 # Main content area
 st.markdown('<h1>Historical Chat Bot</h1>', unsafe_allow_html=True)
@@ -815,31 +840,32 @@ for idx, message in enumerate(st.session_state.messages):
                     st.audio(audio_bytes, format='audio/mp3')
             
             with cols[0]:
-                st.markdown(f'<div>{message["content"]}</div>', unsafe_allow_html=True)
-                
-                # Show suggestions if this is the most recent assistant message
-                if idx == len(st.session_state.messages) - 1 and st.session_state.suggestions:
-                    for suggestion in st.session_state.suggestions:
-                        # Clean up the suggestion text
-                        clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
-                        clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
-                        # Use a unique key combining message index and suggestion
-                        button_key = f"suggestion_{idx}_{clean_suggestion}"
-                        if st.button(clean_suggestion, key=button_key):
-                            st.session_state.messages.append({"role": "user", "content": clean_suggestion})
-                            save_conversation()  # Save after user message
-                            
-                            # Get and add AI response
-                            wiki_content = get_wikipedia_content(clean_suggestion)
-                            if wiki_content:
-                                response = get_ai_response(clean_suggestion, wiki_content)
-                            else:
-                                response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
-                            st.session_state.messages.append({"role": "assistant", "content": response})
-                            save_conversation()  # Save after AI response
-                            st.rerun()
+                st.markdown(message["content"], unsafe_allow_html=True)
         else:
             st.markdown(message["content"], unsafe_allow_html=True)
+        
+        # Show suggestion buttons only for the most recent assistant message
+        if (message["role"] == "assistant" and 
+            idx == len(st.session_state.messages) - 1 and 
+            st.session_state.suggestions):
+            cols = st.columns(len(st.session_state.suggestions))
+            for i, (col, suggestion) in enumerate(zip(cols, st.session_state.suggestions)):
+                # Clean up the suggestion text
+                clean_suggestion = suggestion.strip()
+                # Remove importance markers and clean up text
+                clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_suggestion)
+                clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
+                # Use a unique key combining message index and suggestion index
+                button_key = f"suggestion_{idx}_{i}"
+                if col.button(clean_suggestion, key=button_key):
+                    st.session_state.messages.append({"role": "user", "content": clean_suggestion})
+                    wiki_content = get_wikipedia_content(clean_suggestion)
+                    if wiki_content:
+                        response = get_ai_response(clean_suggestion, wiki_content)
+                    else:
+                        response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.rerun()
 
 # Chat input
 if prompt := st.chat_input("What would you like to know about history?"):
