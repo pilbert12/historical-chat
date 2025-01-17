@@ -378,8 +378,9 @@ Create a search strategy that will help find relevant Wikipedia articles. Consid
 2. Relevant time periods and locations
 3. Related historical contexts and themes
 4. Alternative names or terms that might be used
+5. Broader historical context and related topics
 
-Respond with ONLY a JSON array of search terms, ordered from most specific to most general. Example:
+Respond with ONLY a JSON array of search terms, ordered from most specific to most general, with at least 10 variations. Example:
 ["exact term", "alternative term", "broader context", ...]"""
 
         # Get AI-generated search strategy
@@ -401,14 +402,14 @@ Respond with ONLY a JSON array of search terms, ordered from most specific to mo
                     'messages': [
                         {
                             'role': 'system',
-                            'content': 'You are a historical research assistant. Respond only with a JSON array of search terms.'
+                            'content': 'You are a historical research assistant. Generate a diverse set of search terms, from specific to general.'
                         },
                         {
                             'role': 'user',
                             'content': strategy_prompt
                         }
                     ],
-                    'temperature': 0.3
+                    'temperature': 0.7  # Increased for more creative search terms
                 }
             )
             search_terms = json.loads(response.json()['choices'][0]['message']['content'])
@@ -425,14 +426,14 @@ Respond with ONLY a JSON array of search terms, ordered from most specific to mo
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a historical research assistant. Respond only with a JSON array of search terms."
+                        "content": "You are a historical research assistant. Generate a diverse set of search terms, from specific to general."
                     },
                     {
                         "role": "user",
                         "content": strategy_prompt
                     }
                 ],
-                temperature=0.3
+                temperature=0.7  # Increased for more creative search terms
             )
             
             search_terms = json.loads(completion.choices[0].message.content)
@@ -443,17 +444,23 @@ Respond with ONLY a JSON array of search terms, ordered from most specific to mo
         found_articles = {}
         processed_count = 0
         relevant_articles_found = 0
+        last_progress_update = time.time()
         
         # Search progress tracking
         search_progress.markdown("🔍 Beginning intelligent search process...")
         
         # Process each search term
-        for term in search_terms:
-            search_progress.markdown(
-                f"🔍 Searching... (Articles processed: {processed_count})\n\n"
-                f"Currently trying: {term}\n\n"
-                f"Relevant articles found: {relevant_articles_found}"
-            )
+        for term_index, term in enumerate(search_terms):
+            # Update progress less frequently to avoid UI lag
+            current_time = time.time()
+            if current_time - last_progress_update >= 0.5:  # Update every 0.5 seconds
+                search_progress.markdown(
+                    f"🔍 Searching... (Articles processed: {processed_count})\n\n"
+                    f"Currently trying: {term}\n\n"
+                    f"Relevant articles found: {relevant_articles_found}\n\n"
+                    f"Search term {term_index + 1} of {len(search_terms)}"
+                )
+                last_progress_update = current_time
             
             try:
                 # Get initial search results
@@ -575,6 +582,11 @@ Respond with a JSON object containing:
                     break
                     
             except Exception as e:
+                continue
+            
+            # If we've processed too many articles without finding enough relevant ones,
+            # continue to the next search term
+            if processed_count >= 50 and relevant_articles_found == 0:
                 continue
         
         # Show final stats
