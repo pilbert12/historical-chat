@@ -431,7 +431,12 @@ def get_groq_response(prompt, wiki_content):
         if not api_key:
             return "Please enter your Groq API key in the sidebar to continue. You can get a free key from groq.com"
         
-        client = Groq(api_key=api_key)
+        # Initialize Groq client with proxy settings
+        client = Groq(
+            api_key=api_key,
+            base_url="https://api.groq.com/v1",
+            http_client=requests.Session()
+        )
         
         # Build conversation history context
         conversation_context = ""
