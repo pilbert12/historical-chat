@@ -505,44 +505,37 @@ def get_wikipedia_content(query):
                 search_progress.markdown(f"🔍 Searching for: {term}")
                 search_results = wikipedia.search(term, results=8)
                 for title in search_results:
-                    # Track content before processing
                     content_before = len(wiki_content)
                     process_article(title)
-                    # If new content was added
                     if len(wiki_content) > content_before:
                         total_content_found += 1
                         relevant_snippets.append(title)
                     
                 if total_content_found >= 3 and max(score for _, score in wiki_content) >= 5:
-                    # Only stop if we have enough content AND at least one highly relevant article
                     break
                     
             except Exception as e:
                 continue
                 
-        # If we haven't found enough content, keep searching with broader terms
+        # If we haven't found enough content, expand search
         if total_content_found < 3:
-            search_progress.markdown("🔍 Expanding search to find more relevant content...")
-            for title in wikipedia.search(query, results=20):  # Broader search
-                if total_content_found >= 3:
-                    break
+            search_progress.markdown("🔍 Expanding search with broader terms...")
+            time.sleep(1)
+            for title in wikipedia.search(query, results=20):
                 content_before = len(wiki_content)
                 process_article(title)
                 if len(wiki_content) > content_before:
                     total_content_found += 1
                     relevant_snippets.append(title)
+                if total_content_found >= 3:
+                    break
 
-        # Show search completion message
-        content_count = len([c for c, s in wiki_content if s > 0])  # Count content pieces with positive relevance
-        if content_count > 0:
-            search_progress.markdown(f"""ℹ️ Search complete
-Found relevant content from {content_count} sources""")
-            time.sleep(2)
-        else:
-            search_progress.markdown("ℹ️ Continuing search with broader terms...")
-            time.sleep(1)
-        
-        search_progress.empty()  # Clear the progress display
+        # Show final search completion message
+        content_count = len([c for c, s in wiki_content if s > 0])
+        search_progress.markdown(f"""✅ Search complete
+Found content from {content_count} sources""")
+        time.sleep(2)
+        search_progress.empty()
 
         # Reset suggestions at the start of each new response
         st.session_state.suggestions = []
