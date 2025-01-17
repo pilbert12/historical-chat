@@ -411,9 +411,9 @@ def get_wikipedia_content(query):
         found_articles = {}  # Track which articles contributed what content
         processed_count = 0
         
-        def process_article(title, depth=0, max_depth=3):  # Increased depth to 3
+        def process_article(title, depth=0, max_depth=3):
             """Process an article and its related links up to max_depth."""
-            nonlocal processed_count
+            nonlocal processed_count, total_content_found
             if depth > max_depth or title in found_articles:
                 return
             
@@ -425,64 +425,71 @@ def get_wikipedia_content(query):
                 if not page.exists():
                     return
                     
-                # Get summary and check relevance
+                # Get summary and calculate relevance score
                 summary = page.summary
+                relevance_score = 0
                 
-                # Validate summary content
-                if not validate_wiki_content(summary, title):
-                    return
-                    
-                # Track what content we're using from this article
-                found_articles[title] = {
-                    'summary': summary[:1000],
-                    'used_sections': [],
-                    'relevance': 'primary' if depth == 0 else 'related'
-                }
+                # Calculate relevance based on key term matches in title and summary
+                title_matches = sum(term.lower() in title.lower() for term in key_terms)
+                summary_matches = sum(term.lower() in summary.lower() for term in key_terms)
                 
-                # Add summary if unique
-                if summary not in seen_content:
-                    seen_content.add(summary)
-                    wiki_content.append(f"From article '{title}':\n{summary[:1000]}")
-                    
-                # Look for relevant sections
-                sections = page.sections
-                if sections:
-                    relevant_sections = []
-                    for section in sections:
-                        section_text = page.section_by_title(section)
-                        if len(section_text) > 100 and validate_wiki_content(section_text, title):
-                            relevant_sections.append((section, section_text))
-                    
-                    # Sort sections by relevance
-                    relevant_sections.sort(key=lambda x: sum(term.lower() in x[1].lower() for term in key_terms), reverse=True)
-                    
-                    # Take top 5 most relevant sections
-                    for section, section_text in relevant_sections[:5]:
-                        section_summary = section_text[:500]
-                        if section_summary not in seen_content:
-                            seen_content.add(section_summary)
-                            wiki_content.append(f"Additional context from section '{section}':\n{section_summary}")
-                            found_articles[title]['used_sections'].append({
-                                'name': section,
-                                'content': section_summary
-                            })
+                # Title matches are worth more
+                relevance_score = (title_matches * 3) + summary_matches
                 
-                # If this is not too deep, follow links to related articles
-                if depth < max_depth:
-                    # Get links from the page
-                    links = page.links
-                    # Sort links by relevance to our key terms
-                    relevant_links = []
-                    for link in links:
-                        relevance_score = sum(term.lower() in link.lower() for term in key_terms)
-                        if relevance_score > 0:
-                            relevant_links.append((link, relevance_score))
+                # Only process if article has some relevance
+                if relevance_score > 0:
+                    # Track what content we're using from this article
+                    found_articles[title] = {
+                        'summary': summary[:1000],
+                        'used_sections': [],
+                        'relevance': relevance_score,
+                        'depth': depth
+                    }
                     
-                    # Sort by relevance score and process top 8 related articles
-                    relevant_links.sort(key=lambda x: x[1], reverse=True)
-                    for link, _ in relevant_links[:8]:  # Increased from 5 to 8
-                        process_article(link, depth + 1, max_depth)
+                    # Add summary if unique
+                    if summary not in seen_content:
+                        seen_content.add(summary)
+                        wiki_content.append((f"From article '{title}':\n{summary[:1000]}", relevance_score))
+                        total_content_found += 1
                         
+                    # Look for relevant sections
+                    sections = page.sections
+                    if sections:
+                        relevant_sections = []
+                        for section in sections:
+                            section_text = page.section_by_title(section)
+                            if len(section_text) > 100:
+                                section_matches = sum(term.lower() in section_text.lower() for term in key_terms)
+                                if section_matches > 0:
+                                    relevant_sections.append((section, section_text, section_matches))
+                        
+                        # Sort sections by relevance
+                        relevant_sections.sort(key=lambda x: x[2], reverse=True)
+                        
+                        # Take top 3 most relevant sections
+                        for section, section_text, section_score in relevant_sections[:3]:
+                            section_summary = section_text[:500]
+                            if section_summary not in seen_content:
+                                seen_content.add(section_summary)
+                                wiki_content.append((f"Additional context from section '{section}':\n{section_summary}", section_score))
+                                found_articles[title]['used_sections'].append({
+                                    'name': section,
+                                    'content': section_summary
+                                })
+                        
+                    # Follow relevant links only if this is a highly relevant article
+                    if depth < max_depth and relevance_score >= 3:
+                        links = page.links
+                        relevant_links = []
+                        for link in links:
+                            link_score = sum(term.lower() in link.lower() for term in key_terms)
+                            if link_score > 0:
+                                relevant_links.append((link, link_score))
+                        
+                        relevant_links.sort(key=lambda x: x[1], reverse=True)
+                        for link, _ in relevant_links[:5]:
+                            process_article(link, depth + 1, max_depth)
+                            
             except Exception as e:
                 return
         
@@ -537,7 +544,7 @@ Found content from {len(wiki_content)} sources""")
         if wiki_content:
             # Store found articles in session state for reference
             st.session_state['last_wiki_articles'] = found_articles
-            return "\n\n".join(wiki_content)
+            return "\n\n".join([content for content, score in wiki_content[:8]])
         return None
     except Exception as e:
         st.error(f"Error searching Wikipedia: {str(e)}")
