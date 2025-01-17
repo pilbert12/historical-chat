@@ -691,7 +691,7 @@ REQUIREMENTS:
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
         completion = client.chat.completions.create(
-            model="llama2-70b-4096",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
