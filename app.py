@@ -304,43 +304,73 @@ def add_wiki_links(text):
 def get_wikipedia_content(query):
     """Search Wikipedia and get content for the query."""
     try:
-        # Search for the query
-        search_results = wikipedia.search(query, results=5)  # Increased from 3 to 5 results
+        # Clean up query and extract key terms
+        doc = nlp(query)
+        key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
+        search_terms = [query] + key_terms  # Start with full query, then try key terms
         
-        if not search_results:
-            return None
-            
         wiki_content = []
-        seen_content = set()  # To avoid duplicate content
+        seen_content = set()
+        found_articles = {}  # Track which articles contributed what content
         
-        # Get content for each result
-        for title in search_results:
+        for term in search_terms:
             try:
-                page = wiki.page(title)
-                if page.exists():
-                    # Get both summary and first section of the main content
-                    summary = page.summary[0:1000]  # Increased from 500 to 1000 chars
-                    
-                    # Only add if content is unique
-                    if summary not in seen_content:
-                        seen_content.add(summary)
-                        wiki_content.append(f"From article '{title}':\n{summary}")
+                # Search for articles
+                search_results = wikipedia.search(term, results=3)
+                
+                for title in search_results:
+                    if title in found_articles:
+                        continue
                         
-                        # Get sections and include the first relevant section if available
+                    try:
+                        page = wiki.page(title)
+                        if not page.exists():
+                            continue
+                            
+                        # Get summary and check relevance
+                        summary = page.summary
+                        
+                        # Check if the summary contains any of our key terms
+                        if not any(term.lower() in summary.lower() for term in key_terms):
+                            continue
+                            
+                        # Track what content we're using from this article
+                        found_articles[title] = {
+                            'summary': summary[:1000],  # First 1000 chars of summary
+                            'used_sections': []
+                        }
+                        
+                        # Add summary if unique
+                        if summary not in seen_content:
+                            seen_content.add(summary)
+                            wiki_content.append(f"From article '{title}':\n{summary[:1000]}")
+                            
+                        # Look for relevant sections
                         sections = page.sections
                         if sections:
-                            for section in sections[:2]:  # Look at first 2 sections
+                            for section in sections[:3]:  # Look at first 3 sections
                                 section_text = page.section_by_title(section)
-                                if len(section_text) > 100:  # Only include substantial sections
+                                if len(section_text) > 100 and any(term.lower() in section_text.lower() for term in key_terms):
                                     section_summary = section_text[:500]
                                     if section_summary not in seen_content:
                                         seen_content.add(section_summary)
                                         wiki_content.append(f"Additional context from section '{section}':\n{section_summary}")
-                                        break  # Only include one additional section
+                                        found_articles[title]['used_sections'].append({
+                                            'name': section,
+                                            'content': section_summary
+                                        })
+                    except Exception as e:
+                        continue
+                        
+                if found_articles:  # If we found relevant articles, no need to keep searching
+                    break
+                    
             except Exception as e:
                 continue
         
         if wiki_content:
+            # Store found articles in session state for reference
+            st.session_state['last_wiki_articles'] = found_articles
             return "\n\n".join(wiki_content)
         return None
     except Exception as e:
@@ -555,89 +585,48 @@ Mark EVERY important term, and ensure proper hierarchy through your marking."""
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
     try:
-        # Extract key terms from the prompt for better Wikipedia searching
-        doc = nlp(prompt)
-        key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
-        
-        # Track Wikipedia sources with their content
-        sources_with_content = {}
-        
-        # Process main wiki content source if available
-        if wiki_content:
-            sections = wiki_content.split("\nFrom article '")
-            for section in sections:
-                if section:
-                    if "'" in section:
-                        title = section.split("'")[0]
-                        content = section.split("':\n")[1].split("\nAdditional context")[0]
-                        sources_with_content[title] = {
-                            'summary': content[:200] + "...",  # First 200 chars of summary
-                            'sections': []
-                        }
-                        # Check for additional sections
-                        if "Additional context from section '" in section:
-                            section_parts = section.split("Additional context from section '")
-                            for part in section_parts[1:]:
-                                section_name = part.split("':\n")[0]
-                                section_content = part.split("':\n")[1].split("\n")[0]
-                                sources_with_content[title]['sections'].append({
-                                    'name': section_name,
-                                    'preview': section_content[:100] + "..."
-                                })
-        
-        # Get additional content and track sources
-        for term in key_terms:
-            if term.lower() not in str(sources_with_content).lower():
-                extra_content = get_wikipedia_content(term)
-                if extra_content:
-                    sections = extra_content.split("\nFrom article '")
-                    for section in sections:
-                        if section and "'" in section:
-                            title = section.split("'")[0]
-                            if title not in sources_with_content:
-                                content = section.split("':\n")[1].split("\nAdditional context")[0]
-                                sources_with_content[title] = {
-                                    'summary': content[:200] + "...",
-                                    'sections': []
-                                }
-                                if "Additional context from section '" in section:
-                                    section_parts = section.split("Additional context from section '")
-                                    for part in section_parts[1:]:
-                                        section_name = part.split("':\n")[0]
-                                        section_content = part.split("':\n")[1].split("\n")[0]
-                                        sources_with_content[title]['sections'].append({
-                                            'name': section_name,
-                                            'preview': section_content[:100] + "..."
-                                        })
-        
-        # Combine all wiki content for the AI
-        full_wiki_content = wiki_content
-        
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
         # Get the response
         if model_choice == "Deepseek (Requires API Key)":
-            response = get_deepseek_response(prompt, full_wiki_content)
+            response = get_deepseek_response(prompt, wiki_content)
         else:
-            response = get_groq_response(prompt, full_wiki_content)
+            response = get_groq_response(prompt, wiki_content)
             
-        # Add detailed sources to the response if we have them
-        if sources_with_content:
-            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem; padding: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(255, 255, 255, 0.02); font-size: 0.9em; color: rgba(255, 255, 255, 0.5);">'
-            sources_html += '<strong style="color: rgba(255, 255, 255, 0.8); font-size: 1.1em;">Wikipedia Sources</strong><br><br>'
+        # Add sources to the response if we have them
+        if 'last_wiki_articles' in st.session_state:
+            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem; padding: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(255, 255, 255, 0.02);">'
+            sources_html += '<strong style="color: rgba(255, 255, 255, 0.8); font-size: 1.1em;">Content Used from Wikipedia</strong><br><br>'
             
-            for title, data in sources_with_content.items():
-                sources_html += f'<div style="margin-bottom: 1rem;">'
-                sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.7); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a><br>'
-                sources_html += f'<div style="margin: 0.5rem 0 0.5rem 1rem; color: rgba(255, 255, 255, 0.5); font-size: 0.9em;">{data["summary"]}</div>'
-                
-                if data['sections']:
-                    sources_html += '<div style="margin-left: 1rem; margin-top: 0.5rem;">'
-                    for section in data['sections']:
-                        sources_html += f'<div style="margin-top: 0.3rem; color: rgba(255, 255, 255, 0.6);"><em>{section["name"]}</em>: <span style="color: rgba(255, 255, 255, 0.4);">{section["preview"]}</span></div>'
+            for title, data in st.session_state['last_wiki_articles'].items():
+                # Only show articles that contributed content
+                if data['summary'] or data['used_sections']:
+                    sources_html += f'<div style="margin-bottom: 1.5rem;">'
+                    # Article title with link
+                    sources_html += f'<div style="margin-bottom: 0.5rem;">'
+                    sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a>'
                     sources_html += '</div>'
-                sources_html += '</div>'
+                    
+                    # Main summary
+                    if data['summary']:
+                        sources_html += '<div style="margin-left: 1rem; margin-bottom: 0.5rem;">'
+                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>From main article:</em></div>'
+                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; line-height: 1.4;">{data["summary"][:200]}...</div>'
+                        sources_html += '</div>'
+                    
+                    # Used sections
+                    if data['used_sections']:
+                        sources_html += '<div style="margin-left: 1rem;">'
+                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>Additional sections used:</em></div>'
+                        for section in data['used_sections']:
+                            sources_html += f'<div style="margin-bottom: 0.5rem;">'
+                            sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.2rem;">• {section["name"]}</div>'
+                            sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; margin-left: 0.5rem; line-height: 1.4;">{section["content"][:150]}...</div>'
+                            sources_html += '</div>'
+                        sources_html += '</div>'
+                    
+                    sources_html += '</div>'
             
             sources_html += '</div>'
             
