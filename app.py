@@ -29,7 +29,12 @@ if 'wiki_references' not in st.session_state:
 
 def process_importance_markers(text):
     """Process text and add visual hierarchy through styling."""
-    # Clean up any existing formatting
+    # First process any existing importance markers
+    text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
+    text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
+    text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
+    
+    # Clean up any remaining formatting
     text = re.sub(r'<[^>]+>', '', text)
     
     # Load spacy model for NLP processing
@@ -41,6 +46,11 @@ def process_importance_markers(text):
     # Process each token based on its type
     processed_text = []
     for token in doc:
+        # Skip tokens that are already styled
+        if token.text.startswith('<span'):
+            processed_text.append(token.text)
+            continue
+            
         # Primary terms: Proper nouns, dates, locations
         if (token.pos_ == 'PROPN' or 
             token.ent_type_ in ['DATE', 'GPE', 'LOC', 'PERSON']):
@@ -592,16 +602,26 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Clean up formatting artifacts before processing
-        response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', response)  # Remove [1][text] markers
-        response = re.sub(r'\[.*?\]', '', response)  # Remove any remaining brackets
-        response = re.sub(r'\d+\.\s*', '', response)  # Remove numbered lists
-        response = re.sub(r'[{}]', '', response)  # Remove curly braces
-        response = re.sub(r'\s+', ' ', response)  # Normalize whitespace
-        response = response.strip()
+        # Split response and suggestions if needed
+        parts = response.split('[SUGGESTION]')
+        main_response = parts[0].strip()
+        
+        # Store suggestions in session state
+        if len(parts) > 1:
+            suggestions = [s.strip() for s in parts[1:] if s.strip()]
+            st.session_state.suggestions = suggestions[:3]
+        
+        # Clean up formatting artifacts
+        main_response = re.sub(r'PART \d:', '', main_response)
+        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+        main_response = re.sub(r'Follow-up Questions:', '', main_response)
+        main_response = re.sub(r'https?://\S+', '', main_response)
+        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        main_response = re.sub(r'\s+', ' ', main_response)
+        main_response = main_response.strip()
         
         # Process the response with importance markers
-        processed_response = process_importance_markers(response)
+        processed_response = process_importance_markers(main_response)
         return processed_response
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
