@@ -41,17 +41,16 @@ def process_importance_markers(text):
     # Process each token based on its type
     processed_text = []
     for token in doc:
-        # Primary terms: Proper nouns, dates, locations, pronouns
-        if (token.pos_ in ['PROPN'] or 
-            token.ent_type_ in ['DATE', 'GPE', 'LOC', 'PERSON'] or 
-            token.pos_ == 'PRON'):
+        # Primary terms: Proper nouns, dates, locations
+        if (token.pos_ == 'PROPN' or 
+            token.ent_type_ in ['DATE', 'GPE', 'LOC', 'PERSON']):
             processed_text.append(f'<span class="primary-term">{token.text}</span>')
         
         # Secondary terms: Regular nouns, verbs, adjectives
         elif token.pos_ in ['NOUN', 'VERB', 'ADJ']:
             processed_text.append(f'<span class="secondary-term">{token.text}</span>')
         
-        # Tertiary terms: Everything else
+        # Tertiary terms: Everything else (including pronouns)
         else:
             processed_text.append(f'<span class="tertiary-term">{token.text}</span>')
     
