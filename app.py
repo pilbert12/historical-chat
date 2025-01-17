@@ -460,6 +460,48 @@ Use the same Wikipedia content but stay strictly focused on the topic."""
         st.error(f"Error validating content: {str(e)}")
         return True, None  # Continue with original response if validation fails
 
+def post_process_response(text):
+    """Ensure consistent formatting of important terms in the response."""
+    # Extract entities and important terms
+    doc = nlp(text)
+    
+    # Build a list of terms to mark with importance levels
+    important_terms = []
+    secondary_terms = []
+    tertiary_terms = []
+    
+    # Identify important terms
+    for ent in doc.ents:
+        if ent.label_ in {'PERSON', 'EVENT', 'ORG', 'GPE', 'LOC'}:
+            if len(ent.text) > 3:  # Avoid short terms
+                if ent.label_ in {'PERSON', 'EVENT'}:
+                    important_terms.append(ent.text)
+                elif ent.label_ in {'ORG', 'GPE'}:
+                    secondary_terms.append(ent.text)
+                else:
+                    tertiary_terms.append(ent.text)
+    
+    # Add dates to secondary terms
+    for ent in doc.ents:
+        if ent.label_ == 'DATE':
+            if any(c.isdigit() for c in ent.text):  # Only dates with numbers
+                secondary_terms.append(ent.text)
+    
+    # Sort terms by length (longest first) to handle nested terms correctly
+    important_terms.sort(key=len, reverse=True)
+    secondary_terms.sort(key=len, reverse=True)
+    tertiary_terms.sort(key=len, reverse=True)
+    
+    # Apply formatting
+    for term in important_terms:
+        text = re.sub(rf'\b{re.escape(term)}\b', f'[1][{term}]', text, flags=re.IGNORECASE)
+    for term in secondary_terms:
+        text = re.sub(rf'\b{re.escape(term)}\b', f'[2][{term}]', text, flags=re.IGNORECASE)
+    for term in tertiary_terms:
+        text = re.sub(rf'\b{re.escape(term)}\b', f'[3][{term}]', text, flags=re.IGNORECASE)
+    
+    return text
+
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
     try:
@@ -472,8 +514,17 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
+        # Clean the response of any existing markers
+        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', response)
+        
+        # Apply our own formatting
+        formatted_response = post_process_response(clean_response)
+        
+        # Convert to HTML with links
+        html_response = add_wiki_links(formatted_response)
+        
         # Validate content
-        is_valid, correction_prompt = validate_content(prompt, response)
+        is_valid, correction_prompt = validate_content(prompt, html_response)
         
         # If content is not valid, get a new response
         if not is_valid and correction_prompt:
@@ -482,7 +533,12 @@ def get_ai_response(prompt, wiki_content):
             else:
                 response = get_groq_response(correction_prompt, wiki_content)
             
-        # Add sources to the response if we have them
+            # Process the new response
+            clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', response)
+            formatted_response = post_process_response(clean_response)
+            html_response = add_wiki_links(formatted_response)
+        
+        # Add sources section
         if 'last_wiki_articles' in st.session_state:
             sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem;">'
             sources_html += '<details style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;">'
@@ -490,22 +546,18 @@ def get_ai_response(prompt, wiki_content):
             sources_html += '<div style="max-height: 300px; overflow-y: auto; padding: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">'
             
             for title, data in st.session_state['last_wiki_articles'].items():
-                # Only show articles that contributed content
                 if data['summary'] or data['used_sections']:
                     sources_html += f'<div style="margin-bottom: 1.5rem;">'
-                    # Article title with link
                     sources_html += f'<div style="margin-bottom: 0.5rem;">'
                     sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a>'
                     sources_html += '</div>'
                     
-                    # Main summary
                     if data['summary']:
                         sources_html += '<div style="margin-left: 1rem; margin-bottom: 0.5rem;">'
                         sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>From main article:</em></div>'
                         sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; line-height: 1.4;">{data["summary"][:200]}...</div>'
                         sources_html += '</div>'
                     
-                    # Used sections
                     if data['used_sections']:
                         sources_html += '<div style="margin-left: 1rem;">'
                         sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>Additional sections used:</em></div>'
@@ -520,13 +572,13 @@ def get_ai_response(prompt, wiki_content):
             
             sources_html += '</div></details></div>'
             
-            # Add sources to the response while preserving any existing HTML
-            if response.endswith('</div>'):
-                response = response[:-6] + sources_html + '</div>'
+            # Add sources to the response
+            if html_response.endswith('</div>'):
+                html_response = html_response[:-6] + sources_html + '</div>'
             else:
-                response += sources_html
+                html_response += sources_html
                 
-        return response
+        return html_response
             
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
