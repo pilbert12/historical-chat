@@ -299,12 +299,13 @@ def get_groq_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]  # Get last 6 messages
+            recent_messages = st.session_state.messages[-6:]
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
+                # Fix the regex pattern to avoid invalid group reference
                 content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\2', content)
+                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', lambda m: m.group(2), content)
                 conversation_context += f"{role}: {content}\n"
 
         completion = client.chat.completions.create(
