@@ -340,6 +340,25 @@ def add_wiki_links(text):
     final_text = '. '.join(result).strip()
     return f'<div>{final_text}</div>'
 
+def validate_wiki_content(text, title):
+    """Validate that the Wikipedia content is relevant to the query."""
+    try:
+        # Extract key terms from the content
+        doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
+        content_entities = set([ent.text.lower() for ent in doc.ents])
+        
+        # Calculate relevance scores
+        term_matches = sum(term.lower() in text.lower() for term in key_terms)
+        entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
+        
+        # More lenient relevance criteria - just check if there's any meaningful overlap
+        is_relevant = term_matches > 0 or entity_overlap > 0
+        
+        return is_relevant
+        
+    except Exception as e:
+        return True  # Accept content if validation fails
+
 def get_wikipedia_content(query):
     """Search Wikipedia and get content for the query."""
     try:
@@ -503,8 +522,11 @@ def get_wikipedia_content(query):
                     relevant_snippets.append(title)
 
         # Show search completion message
-        search_progress.markdown(f"""ℹ️ Search complete
-Found content from {total_content_found} articles""")
+        if len(wiki_content) > 0:
+            search_progress.markdown(f"""ℹ️ Search complete
+Found content from {len(wiki_content)} sources""")
+        else:
+            search_progress.markdown("ℹ️ No relevant content found")
         
         time.sleep(2)  # Show completion message briefly
         search_progress.empty()  # Clear the progress display
