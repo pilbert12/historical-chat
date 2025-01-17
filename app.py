@@ -24,7 +24,7 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 st.markdown("""
 <style>
     /* Link styling */
-    .element-container.st-emotion-cache-* div.stMarkdown a {
+    .element-container div.stMarkdown a {
         color: inherit !important;
         text-decoration: none !important;
         cursor: pointer;
@@ -32,21 +32,21 @@ st.markdown("""
     }
     
     /* Importance-based text styling */
-    .element-container.st-emotion-cache-* div.stMarkdown a[data-importance="important"] {
+    .element-container div.stMarkdown a[data-importance="important"] {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .element-container.st-emotion-cache-* div.stMarkdown a[data-importance="secondary"] {
+    .element-container div.stMarkdown a[data-importance="secondary"] {
         color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    .element-container.st-emotion-cache-* div.stMarkdown a[data-importance="tertiary"] {
+    .element-container div.stMarkdown a[data-importance="tertiary"] {
         color: rgba(255, 255, 255, 0.75) !important;
     }
     
     /* Subtle hover effect for links */
-    .element-container.st-emotion-cache-* div.stMarkdown a:hover {
+    .element-container div.stMarkdown a:hover {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
         padding: 2px 4px;
@@ -101,7 +101,7 @@ def create_wiki_link(text, importance):
     """Create a Wikipedia link with proper styling based on importance."""
     clean_text = text.strip()
     search_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(clean_text.replace(' ', '_'))}"
-    return f'<a href="{search_url}" data-importance="{importance}" target="_blank" rel="noopener noreferrer" onclick="window.open(\'{search_url}\', \'_blank\'); return false;" style="color: inherit !important; text-decoration: none !important;">{clean_text}</a>'
+    return f'<a href="{search_url}" data-importance="{importance}" target="_blank" rel="noopener noreferrer" onclick="window.open(\'{search_url}\', \'_blank\')" style="color: inherit !important; text-decoration: none !important;">{clean_text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
