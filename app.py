@@ -263,30 +263,32 @@ st.markdown("""
 
     /* Link styling */
     .stChatMessage div.stMarkdown a {
-        color: inherit !important;
-        text-decoration: none !important;
-        cursor: pointer;
+        color: inherit;
+        text-decoration: none;
+        border-radius: 3px;
+        padding: 0.1em 0.2em;
+        margin: 0 -0.2em;
         transition: all 0.2s ease-in-out;
     }
 
     /* Importance-based text styling */
-    .stChatMessage div.stMarkdown a[data-importance="primary"] {
+    .stChatMessage div.stMarkdown a.text-white {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .stChatMessage div.stMarkdown a[data-importance="secondary"] {
+    .stChatMessage div.stMarkdown a.text-gray-200 {
         color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    .stChatMessage div.stMarkdown a[data-importance="tertiary"] {
+    .stChatMessage div.stMarkdown a.text-gray-400 {
         color: rgba(255, 255, 255, 0.75) !important;
     }
 
-    /* Subtle hover effect for links */
+    /* Hover effect for links */
     .stChatMessage div.stMarkdown a:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        text-decoration: none;
     }
     
     /* Style the buttons container */
@@ -391,28 +393,23 @@ def create_wiki_link(text, importance='supporting'):
     # Clean up text
     clean_text = text.strip()
     
-    # Common words to skip
-    common_words = {
-        'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with', 'he', 'as',
-        'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will',
-        'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which',
-        'go', 'me', 'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year',
-        'your', 'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its',
-        'over', 'think', 'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even',
-        'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us', 'was', 'were', 'had', 'has', 'been',
-        'said', 'did', 'many', 'more', 'those', 'is', 'am', 'are', 'very', 'much'
-    }
-    
-    # Skip if text is too short, just numbers, or common words
-    if (len(clean_text) < 3 or 
-        clean_text.isdigit() or 
-        clean_text.lower() in common_words or 
-        len(clean_text.split()) == 1 and clean_text.lower() in common_words):
+    # Skip if text is too short or just numbers
+    if len(clean_text) < 3 or clean_text.isdigit():
         return text
     
     # Create a search URL
     search_url = f"https://en.wikipedia.org/w/index.php?search={clean_text.replace(' ', '+')}"
-    return f'<a href="{search_url}" data-importance="{importance}">{text}</a>'
+    
+    # Map importance levels to CSS classes
+    importance_map = {
+        'primary': 'text-white font-medium',  # Brightest, bold
+        'secondary': 'text-gray-200',         # Medium brightness
+        'tertiary': 'text-gray-400'           # Dimmer
+    }
+    
+    css_class = importance_map.get(importance, 'text-gray-400')
+    
+    return f'<a href="{search_url}" class="{css_class}" data-importance="{importance}">{text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -531,13 +528,15 @@ Current Question: {prompt}
 Respond in two parts:
 
 PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
+- [1][term] for major historical figures, key events, primary concepts (just wrap the actual term, do not include descriptions like 'major historical figure')
+- [2][term] for dates, places, technical terms (just wrap the actual term, do not include descriptions like 'date and place')
+- [3][term] for related concepts and supporting details (just wrap the actual term, do not include descriptions like 'related concept')
+
+Example: "[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics]."
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' or any classification labels in your response."""
 
         try:
             response = requests.post(
@@ -623,13 +622,15 @@ Current Question: {prompt}
 Respond in two parts:
 
 PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
+- [1][term] for major historical figures, key events, primary concepts (just wrap the actual term, do not include descriptions like 'major historical figure')
+- [2][term] for dates, places, technical terms (just wrap the actual term, do not include descriptions like 'date and place')
+- [3][term] for related concepts and supporting details (just wrap the actual term, do not include descriptions like 'related concept')
+
+Example: "[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics]."
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' in your response."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' or any classification labels in your response."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
@@ -663,6 +664,9 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\s*-\s*$', '', main_response, flags=re.MULTILINE)  # Remove trailing dashes
         main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove standalone dashes
         main_response = re.sub(r'\bterm\b', '', main_response, flags=re.IGNORECASE)  # Remove the word 'term'
+        
+        # Remove classification labels
+        main_response = re.sub(r'\b(major historical figure|key event|date and place|related concept|supporting detail)\b', '', main_response, flags=re.IGNORECASE)
         
         # Process the main response
         main_response = re.sub(r'https?://\S+', '', main_response)
