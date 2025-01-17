@@ -793,53 +793,63 @@ Keep your response natural and flowing, without section headers or numbering. Fo
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
-def validate_content(prompt, response_text):
-    """Validate that the AI response stays on topic and relevant to the prompt."""
+def validate_wiki_content(text, title):
+    """Validate that the Wikipedia content is relevant to the query."""
     try:
-        # Extract key terms from the prompt
-        prompt_doc = nlp(prompt)
-        prompt_entities = set([ent.text.lower() for ent in prompt_doc.ents])
-        prompt_nouns = set([token.text.lower() for token in prompt_doc if token.pos_ in ['PROPN', 'NOUN']])
-        prompt_key_terms = prompt_entities.union(prompt_nouns)
+        # Extract key terms from the content
+        doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
+        content_entities = set([ent.text.lower() for ent in doc.ents])
         
-        # Extract key terms from the response
-        response_doc = nlp(response_text)
-        response_entities = set([ent.text.lower() for ent in response_doc.ents])
+        # Extract dates and years
+        years = set()
+        for ent in doc.ents:
+            if ent.label_ == 'DATE':
+                # Try to extract year from date entity
+                year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
+                if year_match:
+                    years.add(year_match.group(0))
         
-        # Check if the response contains entities not related to the prompt
-        unrelated_entities = []
-        for entity in response_entities:
-            # Skip common words and short terms
-            if len(entity) < 4 or entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'}:
-                continue
-                
-            # Check if this entity is related to any prompt terms
-            is_related = False
-            for prompt_term in prompt_key_terms:
-                if (prompt_term in entity.lower() or 
-                    entity.lower() in prompt_term or 
-                    prompt_term.split()[-1] in entity.lower() or  # Check last word of multi-word terms
-                    entity.lower().split()[-1] in prompt_term):  # Check last word of multi-word entities
-                    is_related = True
-                    break
-            
-            if not is_related:
-                unrelated_entities.append(entity)
+        # If the title contains a year, it must be relevant to our key terms
+        title_year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', title)
+        if title_year_match:
+            title_year = title_year_match.group(0)
+            # Check if this year is relevant to our query
+            year_relevance = any(term.lower() in text.lower() for term in key_terms)
+            if not year_relevance:
+                return False
         
-        if unrelated_entities:
-            # Create a new prompt to get a more focused response
-            correction_prompt = f"""Your previous response included unrelated topics: {', '.join(unrelated_entities)}
-            
-Please provide a new response that focuses ONLY on {prompt} without mentioning unrelated people, events, or concepts.
-Use the same Wikipedia content but stay strictly focused on the topic."""
-            
-            return False, correction_prompt
-            
-        return True, None
+        # Calculate relevance scores
+        term_matches = sum(term.lower() in text.lower() for term in key_terms)
+        entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
+        
+        # Check for historical context words
+        historical_terms = {'history', 'historical', 'event', 'period', 'era', 'century', 'decade', 'war', 'revolution', 'movement', 'reign', 'rule', 'dynasty', 'empire', 'kingdom', 'government', 'politics', 'society', 'culture', 'economy'}
+        historical_context = sum(1 for term in historical_terms if term in text.lower())
+        
+        # Content must meet ANY of these criteria:
+        # 1. Have key term matches
+        # 2. Have entity overlap
+        # 3. Have historical context if it's not a primary source
+        # 4. If it contains a year that matches our query
+        
+        # Check for scientific/astronomical terms that might indicate irrelevant content
+        scientific_terms = {'galaxy', 'cluster', 'constellation', 'star', 'planet', 'physics', 'quantum', 'chemical', 'molecule'}
+        has_scientific_terms = any(term in text.lower() for term in scientific_terms)
+        
+        # Calculate final relevance - more lenient criteria
+        is_relevant = (
+            (term_matches > 0 or  # Has any term matches
+            entity_overlap > 0 or  # Has any entity overlap
+            historical_context > 0) and  # Has any historical context
+            not has_scientific_terms and  # Must not be scientific/astronomical
+            (not title_year_match or year_relevance)  # If it has a year, it must be relevant
+        )
+        
+        return is_relevant
         
     except Exception as e:
         st.error(f"Error validating content: {str(e)}")
-        return True, None  # Continue with original response if validation fails
+        return True  # Accept content if validation fails
 
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
@@ -866,51 +876,49 @@ def get_ai_response(prompt, wiki_content):
                 response = get_deepseek_response(correction_prompt, wiki_content)
             else:
                 response = get_groq_response(correction_prompt, wiki_content)
-            
-        # Add sources to the response if we have them
-        if 'last_wiki_articles' in st.session_state:
+        
+        # Always add sources to the response if we have them
+        if 'last_wiki_articles' in st.session_state and st.session_state['last_wiki_articles']:
             sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem;">'
             sources_html += '<details style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;">'
             sources_html += '<summary style="padding: 1rem; cursor: pointer; user-select: none; font-weight: 500; color: rgba(255, 255, 255, 0.8);">Content Used from Wikipedia</summary>'
             sources_html += '<div style="max-height: 300px; overflow-y: auto; padding: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">'
             
             for title, data in st.session_state['last_wiki_articles'].items():
-                # Only show articles that contributed content
-                if data['summary'] or data['used_sections']:
-                    sources_html += f'<div style="margin-bottom: 1.5rem;">'
-                    # Article title with link
-                    sources_html += f'<div style="margin-bottom: 0.5rem;">'
-                    sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a>'
+                sources_html += f'<div style="margin-bottom: 1.5rem;">'
+                # Article title with link
+                sources_html += f'<div style="margin-bottom: 0.5rem;">'
+                sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a>'
+                sources_html += '</div>'
+                
+                # Main summary
+                if data.get('summary'):
+                    sources_html += '<div style="margin-left: 1rem; margin-bottom: 0.5rem;">'
+                    sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>From main article:</em></div>'
+                    sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; line-height: 1.4;">{data["summary"][:200]}...</div>'
                     sources_html += '</div>'
-                    
-                    # Main summary
-                    if data['summary']:
-                        sources_html += '<div style="margin-left: 1rem; margin-bottom: 0.5rem;">'
-                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>From main article:</em></div>'
-                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; line-height: 1.4;">{data["summary"][:200]}...</div>'
+                
+                # Used sections
+                if data.get('used_sections'):
+                    sources_html += '<div style="margin-left: 1rem;">'
+                    sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>Additional sections used:</em></div>'
+                    for section in data['used_sections']:
+                        sources_html += f'<div style="margin-bottom: 0.5rem;">'
+                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.2rem;">• {section["name"]}</div>'
+                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; margin-left: 0.5rem; line-height: 1.4;">{section["content"][:150]}...</div>'
                         sources_html += '</div>'
-                    
-                    # Used sections
-                    if data['used_sections']:
-                        sources_html += '<div style="margin-left: 1rem;">'
-                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>Additional sections used:</em></div>'
-                        for section in data['used_sections']:
-                            sources_html += f'<div style="margin-bottom: 0.5rem;">'
-                            sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.2rem;">• {section["name"]}</div>'
-                            sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; margin-left: 0.5rem; line-height: 1.4;">{section["content"][:150]}...</div>'
-                            sources_html += '</div>'
-                        sources_html += '</div>'
-                    
                     sources_html += '</div>'
+                
+                sources_html += '</div>'
             
             sources_html += '</div></details></div>'
             
             # Add sources to the response while preserving any existing HTML
-            if response.endswith('</div>'):
-                response = response[:-6] + sources_html + '</div>'
+            if '</div>' in response:
+                response = response.replace('</div>', sources_html + '</div>', 1)
             else:
-                response += sources_html
-                
+                response = f'<div>{response}{sources_html}</div>'
+        
         return response
             
     except Exception as e:
