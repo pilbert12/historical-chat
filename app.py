@@ -629,14 +629,14 @@ PART 1: Provide a detailed response about the topic that takes into account the 
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' in your response."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
+                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics. Never include the word 'term' in your responses."
                 },
                 {
                     "role": "user",
@@ -662,6 +662,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'Follow-Up Questions:', '', main_response)
         main_response = re.sub(r'\s*-\s*$', '', main_response, flags=re.MULTILINE)  # Remove trailing dashes
         main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove standalone dashes
+        main_response = re.sub(r'\bterm\b', '', main_response, flags=re.IGNORECASE)  # Remove the word 'term'
         
         # Process the main response
         main_response = re.sub(r'https?://\S+', '', main_response)
