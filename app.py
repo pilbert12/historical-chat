@@ -559,35 +559,59 @@ def get_ai_response(prompt, wiki_content):
         doc = nlp(prompt)
         key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
         
-        # Get additional wiki content for key terms if needed
-        additional_content = []
-        sources = []  # Track Wikipedia sources
+        # Track Wikipedia sources with their content
+        sources_with_content = {}
         
         # Process main wiki content source if available
-        if wiki_content and "From article '" in wiki_content:
-            sources.append(wiki_content.split("From article '")[1].split("'")[0])
+        if wiki_content:
+            sections = wiki_content.split("\nFrom article '")
+            for section in sections:
+                if section:
+                    if "'" in section:
+                        title = section.split("'")[0]
+                        content = section.split("':\n")[1].split("\nAdditional context")[0]
+                        sources_with_content[title] = {
+                            'summary': content[:200] + "...",  # First 200 chars of summary
+                            'sections': []
+                        }
+                        # Check for additional sections
+                        if "Additional context from section '" in section:
+                            section_parts = section.split("Additional context from section '")
+                            for part in section_parts[1:]:
+                                section_name = part.split("':\n")[0]
+                                section_content = part.split("':\n")[1].split("\n")[0]
+                                sources_with_content[title]['sections'].append({
+                                    'name': section_name,
+                                    'preview': section_content[:100] + "..."
+                                })
         
         # Get additional content and track sources
         for term in key_terms:
-            if term.lower() not in wiki_content.lower():
+            if term.lower() not in str(sources_with_content).lower():
                 extra_content = get_wikipedia_content(term)
                 if extra_content:
-                    # Extract source from the content
-                    if "From article '" in extra_content:
-                        source = extra_content.split("From article '")[1].split("'")[0]
-                        if source not in sources:
-                            sources.append(source)
-                    additional_content.append(extra_content)
+                    sections = extra_content.split("\nFrom article '")
+                    for section in sections:
+                        if section and "'" in section:
+                            title = section.split("'")[0]
+                            if title not in sources_with_content:
+                                content = section.split("':\n")[1].split("\nAdditional context")[0]
+                                sources_with_content[title] = {
+                                    'summary': content[:200] + "...",
+                                    'sections': []
+                                }
+                                if "Additional context from section '" in section:
+                                    section_parts = section.split("Additional context from section '")
+                                    for part in section_parts[1:]:
+                                        section_name = part.split("':\n")[0]
+                                        section_content = part.split("':\n")[1].split("\n")[0]
+                                        sources_with_content[title]['sections'].append({
+                                            'name': section_name,
+                                            'preview': section_content[:100] + "..."
+                                        })
         
-        # Combine all wiki content
+        # Combine all wiki content for the AI
         full_wiki_content = wiki_content
-        if additional_content:
-            full_wiki_content += "\n\nAdditional relevant information:\n" + "\n\n".join(additional_content)
-        
-        # Add sources to the wiki content
-        if sources:
-            source_list = "\n\nSources:\n" + "\n".join(f"- {source}" for source in sources)
-            full_wiki_content += source_list
         
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
@@ -598,11 +622,23 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, full_wiki_content)
             
-        # Add sources to the response if we have them
-        if sources:
-            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(255, 255, 255, 0.02); font-size: 0.9em; color: rgba(255, 255, 255, 0.5);">'
-            sources_html += '<strong style="color: rgba(255, 255, 255, 0.7);">Wikipedia Sources:</strong><br>'
-            sources_html += '<br>'.join(f'• <a href="https://en.wikipedia.org/wiki/{source.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.6); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3);">{source}</a>' for source in sources)
+        # Add detailed sources to the response if we have them
+        if sources_with_content:
+            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem; padding: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(255, 255, 255, 0.02); font-size: 0.9em; color: rgba(255, 255, 255, 0.5);">'
+            sources_html += '<strong style="color: rgba(255, 255, 255, 0.8); font-size: 1.1em;">Wikipedia Sources</strong><br><br>'
+            
+            for title, data in sources_with_content.items():
+                sources_html += f'<div style="margin-bottom: 1rem;">'
+                sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.7); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a><br>'
+                sources_html += f'<div style="margin: 0.5rem 0 0.5rem 1rem; color: rgba(255, 255, 255, 0.5); font-size: 0.9em;">{data["summary"]}</div>'
+                
+                if data['sections']:
+                    sources_html += '<div style="margin-left: 1rem; margin-top: 0.5rem;">'
+                    for section in data['sections']:
+                        sources_html += f'<div style="margin-top: 0.3rem; color: rgba(255, 255, 255, 0.6);"><em>{section["name"]}</em>: <span style="color: rgba(255, 255, 255, 0.4);">{section["preview"]}</span></div>'
+                    sources_html += '</div>'
+                sources_html += '</div>'
+            
             sources_html += '</div>'
             
             # Add sources to the response while preserving any existing HTML
