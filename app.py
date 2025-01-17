@@ -187,6 +187,61 @@ st.markdown("""
     .stChatMessage {
         position: relative !important;
     }
+    
+    /* Styling for the collapsible sources section */
+    details {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    details summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+    }
+    
+    details summary::-webkit-details-marker {
+        display: none;
+    }
+    
+    details summary::before {
+        content: "▶";
+        margin-right: 0.5rem;
+        transition: transform 0.2s ease-in-out;
+        font-size: 0.8em;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    details[open] summary::before {
+        transform: rotate(90deg);
+    }
+    
+    details summary:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Scrollbar styling for sources content */
+    details > div {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+    }
+    
+    details > div::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    details > div::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+    }
+    
+    details > div::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+    }
+    
+    details > div::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
 </style>
 
 <script>
@@ -596,8 +651,10 @@ def get_ai_response(prompt, wiki_content):
             
         # Add sources to the response if we have them
         if 'last_wiki_articles' in st.session_state:
-            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem; padding: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(255, 255, 255, 0.02);">'
-            sources_html += '<strong style="color: rgba(255, 255, 255, 0.8); font-size: 1.1em;">Content Used from Wikipedia</strong><br><br>'
+            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem;">'
+            sources_html += '<details style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;">'
+            sources_html += '<summary style="padding: 1rem; cursor: pointer; user-select: none; font-weight: 500; color: rgba(255, 255, 255, 0.8);">Content Used from Wikipedia</summary>'
+            sources_html += '<div style="max-height: 300px; overflow-y: auto; padding: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">'
             
             for title, data in st.session_state['last_wiki_articles'].items():
                 # Only show articles that contributed content
@@ -628,7 +685,7 @@ def get_ai_response(prompt, wiki_content):
                     
                     sources_html += '</div>'
             
-            sources_html += '</div>'
+            sources_html += '</div></details></div>'
             
             # Add sources to the response while preserving any existing HTML
             if response.endswith('</div>'):
