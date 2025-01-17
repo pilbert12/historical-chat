@@ -306,6 +306,9 @@ def add_wiki_links(text):
         # First, handle any existing importance markers
         sentence = re.sub(r'\[\d+\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'important'), sentence)
         
+        # Track which phrases we've already processed
+        processed_phrases = set()
+        
         # Then process remaining words
         words = sentence.split()
         i = 0
@@ -322,9 +325,11 @@ def add_wiki_links(text):
             if i + 2 < len(words):
                 phrase = ' '.join(words[i:i+3])
                 if (len(phrase) > 5 and 
+                    phrase not in processed_phrases and
                     not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at']) and
                     any(word[0].isupper() for word in words[i:i+3])):
                     phrase_result.append(create_wiki_link(phrase, 'important'))
+                    processed_phrases.add(phrase)
                     i += 3
                     continue
             
@@ -332,18 +337,23 @@ def add_wiki_links(text):
             if i + 1 < len(words):
                 phrase = ' '.join(words[i:i+2])
                 if (len(phrase) > 5 and 
+                    phrase not in processed_phrases and
                     not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at']) and
                     any(word[0].isupper() for word in words[i:i+2])):
                     phrase_result.append(create_wiki_link(phrase, 'secondary'))
+                    processed_phrases.add(phrase)
                     i += 2
                     continue
             
             # Single words
-            if (words[i][0].isupper() and len(words[i]) > 2 and 
-                not any(word.lower() == words[i].lower() for word in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at'])):
-                phrase_result.append(create_wiki_link(words[i], 'important' if i == 0 else 'secondary'))
+            word = words[i]
+            if (word not in processed_phrases and
+                word[0].isupper() and len(word) > 2 and 
+                not any(word.lower() == w.lower() for w in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at'])):
+                phrase_result.append(create_wiki_link(word, 'important' if i == 0 else 'secondary'))
+                processed_phrases.add(word)
             else:
-                phrase_result.append(words[i])
+                phrase_result.append(word)
             i += 1
         
         result.append(' '.join(phrase_result))
