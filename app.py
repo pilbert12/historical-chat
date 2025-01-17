@@ -637,17 +637,79 @@ Mark EVERY important term, and ensure proper hierarchy through your marking."""
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
+def validate_content(prompt, response_text):
+    """Validate that the AI response stays on topic and relevant to the prompt."""
+    try:
+        # Extract key terms from the prompt
+        prompt_doc = nlp(prompt)
+        prompt_entities = set([ent.text.lower() for ent in prompt_doc.ents])
+        prompt_nouns = set([token.text.lower() for token in prompt_doc if token.pos_ in ['PROPN', 'NOUN']])
+        prompt_key_terms = prompt_entities.union(prompt_nouns)
+        
+        # Extract key terms from the response
+        response_doc = nlp(response_text)
+        response_entities = set([ent.text.lower() for ent in response_doc.ents])
+        
+        # Check if the response contains entities not related to the prompt
+        unrelated_entities = []
+        for entity in response_entities:
+            # Skip common words and short terms
+            if len(entity) < 4 or entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'}:
+                continue
+                
+            # Check if this entity is related to any prompt terms
+            is_related = False
+            for prompt_term in prompt_key_terms:
+                if (prompt_term in entity.lower() or 
+                    entity.lower() in prompt_term or 
+                    prompt_term.split()[-1] in entity.lower() or  # Check last word of multi-word terms
+                    entity.lower().split()[-1] in prompt_term):  # Check last word of multi-word entities
+                    is_related = True
+                    break
+            
+            if not is_related:
+                unrelated_entities.append(entity)
+        
+        if unrelated_entities:
+            # Create a new prompt to get a more focused response
+            correction_prompt = f"""Your previous response included unrelated topics: {', '.join(unrelated_entities)}
+            
+Please provide a new response that focuses ONLY on {prompt} without mentioning unrelated people, events, or concepts.
+Use the same Wikipedia content but stay strictly focused on the topic."""
+            
+            return False, correction_prompt
+            
+        return True, None
+        
+    except Exception as e:
+        st.error(f"Error validating content: {str(e)}")
+        return True, None  # Continue with original response if validation fails
+
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
     try:
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
-        # Get the response
+        # Get initial response
         if model_choice == "Deepseek (Requires API Key)":
             response = get_deepseek_response(prompt, wiki_content)
         else:
             response = get_groq_response(prompt, wiki_content)
+        
+        # Extract text content from HTML response
+        clean_response = re.sub(r'<[^>]+>', '', response)
+        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
+        
+        # Validate content
+        is_valid, correction_prompt = validate_content(prompt, clean_response)
+        
+        # If content is not valid, get a new response
+        if not is_valid and correction_prompt:
+            if model_choice == "Deepseek (Requires API Key)":
+                response = get_deepseek_response(correction_prompt, wiki_content)
+            else:
+                response = get_groq_response(correction_prompt, wiki_content)
             
         # Add sources to the response if we have them
         if 'last_wiki_articles' in st.session_state:
