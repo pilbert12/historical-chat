@@ -387,6 +387,12 @@ def get_wikipedia_content(query):
             query + " history",  # Historical context
             query.split(" in ")[0] if " in " in query else query,  # Main topic
             query.split(" in ")[1] if " in " in query else "",  # Time period/location
+            query + " impact",  # Impact/significance
+            query + " background",  # Historical background
+            query + " effects",  # Effects/consequences
+            query + " significance",  # Historical significance
+            query + " period",  # Time period
+            query + " era"  # Historical era
         ]
         default_search_terms = [term for term in default_search_terms if term]  # Remove empty terms
         
@@ -419,8 +425,8 @@ def get_wikipedia_content(query):
         
         # Process each search term
         for term_index, term in enumerate(search_terms):
-            # Check overall search timeout (2 minutes)
-            if time.time() - search_start_time > 120:
+            # Check overall search timeout (5 minutes)
+            if time.time() - search_start_time > 300:
                 search_progress.markdown("⚠️ Search timeout reached. Using available results...")
                 break
                 
@@ -437,13 +443,13 @@ def get_wikipedia_content(query):
             
             try:
                 # Get initial search results with timeout
-                search_results = wikipedia.search(term, results=10)
+                search_results = wikipedia.search(term, results=20)  # Increased from 10 to 20
                 term_start_time = time.time()
                 
                 # For each potential article
                 for title in search_results:
-                    # Check per-term timeout (30 seconds)
-                    if time.time() - term_start_time > 30:
+                    # Check per-term timeout (60 seconds)
+                    if time.time() - term_start_time > 60:  # Increased from 30 to 60
                         break
                         
                     processed_count += 1
@@ -456,10 +462,9 @@ def get_wikipedia_content(query):
                         if not page.exists():
                             continue
                             
-                        # Quick relevance check before full AI validation
-                        if not quick_relevance_check(page.summary, query):
-                            continue
-                            
+                        # Get full content for validation
+                        content_to_validate = f"Title: {title}\n\nSummary: {page.summary}\n\nContent: {page.content[:2000]}"
+                        
                         # Full AI validation with timeout
                         try:
                             with st.spinner(f"Validating article: {title}"):
@@ -483,14 +488,14 @@ def get_wikipedia_content(query):
                                 wiki_content.append(f"From article '{title}':\n{page.summary[:1000]}")
                             
                             # If we have enough articles, we can stop
-                            if relevant_articles_found >= 5:
+                            if relevant_articles_found >= 10:  # Increased from 5 to 10
                                 break
                                 
                     except Exception as e:
                         continue
                         
                 # If we have enough articles, we can stop
-                if relevant_articles_found >= 5:
+                if relevant_articles_found >= 10:  # Increased from 5 to 10
                     break
                     
             except Exception as e:
@@ -498,7 +503,7 @@ def get_wikipedia_content(query):
             
             # If we've processed too many articles without finding any relevant ones,
             # continue to the next search term
-            if processed_count >= 50 and relevant_articles_found == 0:
+            if processed_count >= 100 and relevant_articles_found == 0:  # Increased from 50 to 100
                 continue
         
         # Show final stats
@@ -829,15 +834,36 @@ Search Terms: {', '.join(key_terms) if key_terms else 'None provided'}
 Article Title: {title}
 
 Content to validate:
-{text[:1000]}
+{text[:2000]}
 
-Requirements:
-1. Check if the content directly relates to the search terms
-2. Verify if the content provides historical context
-3. Ensure the content is not about unrelated scientific/technical topics
-4. If dates/years are mentioned, confirm they match the search context
+Requirements for Validation:
+1. Content Analysis:
+   - Does the content directly address the search terms?
+   - Are key historical figures, events, or concepts from the search present?
+   - Is the historical context relevant?
 
-Respond with ONLY 'true' if the content is relevant and meets all requirements, or 'false' if it should be excluded."""
+2. Depth Check:
+   - Does the content provide substantial information?
+   - Are there specific details, dates, or events mentioned?
+   - Is it more than just a passing reference?
+
+3. Context Validation:
+   - Is the content historically focused?
+   - Does it provide background or consequences?
+   - Are there connections to broader historical themes?
+
+4. Relevance Scoring:
+   - How central is this content to the search topic? (0-100%)
+   - Are there significant sections about the search topic?
+   - Would this help answer questions about the topic?
+
+Respond with a JSON object:
+{
+    "is_relevant": true/false,
+    "relevance_score": 0-100,
+    "key_matches": ["list", "of", "matched", "terms"],
+    "reasoning": "Brief explanation of decision"
+}"""
 
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
@@ -861,16 +887,17 @@ Respond with ONLY 'true' if the content is relevant and meets all requirements, 
                     'messages': [
                         {
                             'role': 'system',
-                            'content': 'You are a strict content validator. Respond only with "true" or "false".'
+                            'content': 'You are a strict content validator. Respond only with the requested JSON format.'
                         },
                         {
                             'role': 'user',
                             'content': validation_prompt
                         }
-                    ]
+                    ],
+                    'temperature': 0.3
                 }
             )
-            is_relevant = response.json()['choices'][0]['message']['content'].strip().lower() == 'true'
+            result = json.loads(response.json()['choices'][0]['message']['content'].strip())
             
         else:
             api_key = st.session_state.get('GROQ_API_KEY')
@@ -884,21 +911,22 @@ Respond with ONLY 'true' if the content is relevant and meets all requirements, 
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a strict content validator. Respond only with 'true' or 'false'."
+                        "content": "You are a strict content validator. Respond only with the requested JSON format."
                     },
                     {
                         "role": "user",
                         "content": validation_prompt
                     }
                 ],
-                temperature=0.1,  # Low temperature for more consistent validation
-                max_tokens=10,
+                temperature=0.3,
+                max_tokens=500,
                 top_p=1
             )
             
-            is_relevant = completion.choices[0].message.content.strip().lower() == 'true'
+            result = json.loads(completion.choices[0].message.content.strip())
         
-        return is_relevant
+        # Article must be relevant AND have a high enough relevance score
+        return result.get('is_relevant', False) and result.get('relevance_score', 0) >= 60
         
     except Exception as e:
         st.error(f"Error validating content: {str(e)}")
