@@ -455,10 +455,10 @@ PART 1: Provide a detailed response about the topic that takes into account the 
 - [2][text] for dates, places, technical terms (e.g., [2][1945])
 - [3][text] for related concepts and supporting details (e.g., [3][Allied Powers])
 
-PART 2: Provide three follow-up questions that each introduce a new specific historical aspect or detail related to the topic. Each question should promise clear factual information rather than asking for opinions. Start each on a new line with [SUGGESTION]. Examples:
-- "Learn about the specific military tactics used in the Battle of Waterloo"
-- "Discover how the Industrial Revolution transformed European cities"
-- "Explore the key diplomatic agreements that shaped the post-war period"
+PART 2: Provide three specific follow-up questions that probe deeper into different aspects of the topic. Each question should be clear and focused on historical facts. Start each on a new line with [SUGGESTION]. Examples:
+- "What military tactics did Napoleon use at the Battle of Waterloo?"
+- "How did the Industrial Revolution change living conditions in European cities?"
+- "What were the key terms of the Treaty of Versailles?"
 
 Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant elements, and ensure they're marked exactly once."""
 
@@ -536,10 +536,10 @@ PART 1: Provide a detailed response about the topic that takes into account the 
 - [2][text] for dates, places, technical terms (e.g., [2][1945])
 - [3][text] for related concepts and supporting details (e.g., [3][Allied Powers])
 
-PART 2: Provide three follow-up questions that each introduce a new specific historical aspect or detail related to the topic. Each question should promise clear factual information rather than asking for opinions. Start each on a new line with [SUGGESTION]. Examples:
-- "Learn about the specific military tactics used in the Battle of Waterloo"
-- "Discover how the Industrial Revolution transformed European cities"
-- "Explore the key diplomatic agreements that shaped the post-war period"
+PART 2: Provide three specific follow-up questions that probe deeper into different aspects of the topic. Each question should be clear and focused on historical facts. Start each on a new line with [SUGGESTION]. Examples:
+- "What military tactics did Napoleon use at the Battle of Waterloo?"
+- "How did the Industrial Revolution change living conditions in European cities?"
+- "What were the key terms of the Treaty of Versailles?"
 
 Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant elements, and ensure they're marked exactly once."""
 
