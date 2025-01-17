@@ -858,13 +858,18 @@ for idx, message in enumerate(st.session_state.messages):
                 # Use a unique key combining message index and suggestion index
                 button_key = f"suggestion_{idx}_{i}"
                 if col.button(clean_suggestion, key=button_key):
+                    # Add user's suggestion click as a message
                     st.session_state.messages.append({"role": "user", "content": clean_suggestion})
+                    save_conversation()  # Save after user's suggestion click
+                    
+                    # Get and add AI response
                     wiki_content = get_wikipedia_content(clean_suggestion)
                     if wiki_content:
                         response = get_ai_response(clean_suggestion, wiki_content)
                     else:
                         response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
                     st.session_state.messages.append({"role": "assistant", "content": response})
+                    save_conversation()  # Save after AI response
                     st.rerun()
 
 # Chat input
