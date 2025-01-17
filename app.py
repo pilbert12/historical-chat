@@ -440,14 +440,14 @@ Current Question: {prompt}
 
 Respond in two parts:
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
+PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important elements using these markers:
+- [1][text] for major historical figures, key events, primary concepts (e.g., [1][World War II])
+- [2][text] for dates, places, technical terms (e.g., [2][1945])
+- [3][text] for related concepts and supporting details (e.g., [3][Allied Powers])
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant elements, and ensure they're marked exactly once."""
 
         try:
             response = requests.post(
@@ -518,14 +518,14 @@ Current Question: {prompt}
 
 Respond in two parts:
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
+PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important elements using these markers:
+- [1][text] for major historical figures, key events, primary concepts (e.g., [1][World War II])
+- [2][text] for dates, places, technical terms (e.g., [2][1945])
+- [3][text] for related concepts and supporting details (e.g., [3][Allied Powers])
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant elements, and ensure they're marked exactly once."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
