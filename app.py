@@ -10,9 +10,6 @@ from gtts import gTTS
 import base64
 import io
 from groq import Groq
-import time
-import urllib.parse
-import random
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -190,61 +187,6 @@ st.markdown("""
     .stChatMessage {
         position: relative !important;
     }
-    
-    /* Styling for the collapsible sources section */
-    details {
-        transition: all 0.2s ease-in-out;
-    }
-    
-    details summary {
-        list-style: none;
-        display: flex;
-        align-items: center;
-    }
-    
-    details summary::-webkit-details-marker {
-        display: none;
-    }
-    
-    details summary::before {
-        content: "▶";
-        margin-right: 0.5rem;
-        transition: transform 0.2s ease-in-out;
-        font-size: 0.8em;
-        color: rgba(255, 255, 255, 0.6);
-    }
-    
-    details[open] summary::before {
-        transform: rotate(90deg);
-    }
-    
-    details summary:hover {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    /* Scrollbar styling for sources content */
-    details > div {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
-    }
-    
-    details > div::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    details > div::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
-    }
-    
-    details > div::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-    }
-    
-    details > div::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
 </style>
 
 <script>
@@ -279,14 +221,33 @@ def load_spacy_model():
 
 nlp = load_spacy_model()
 
-def create_wiki_link(text, importance):
-    """Create a Wikipedia search link with proper formatting."""
-    # Clean up the text and create a proper search URL
+def create_wiki_link(text, importance='supporting'):
+    """Create a Wikipedia link for the given text with importance-based styling."""
+    # Clean up text
     clean_text = text.strip()
-    search_url = f"https://en.wikipedia.org/wiki/Special:Search/{urllib.parse.quote(clean_text)}"
     
-    # Return properly formatted HTML with data-importance attribute
-    return f'<a href="{search_url}" class="wiki-link" data-importance="{importance}">{clean_text}</a>'
+    # Common words to skip
+    common_words = {
+        'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with', 'he', 'as',
+        'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will',
+        'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which',
+        'go', 'me', 'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year',
+        'your', 'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its',
+        'over', 'think', 'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even',
+        'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us', 'was', 'were', 'had', 'has', 'been',
+        'said', 'did', 'many', 'more', 'those', 'is', 'am', 'are', 'very', 'much'
+    }
+    
+    # Skip if text is too short, just numbers, or common words
+    if (len(clean_text) < 3 or 
+        clean_text.isdigit() or 
+        clean_text.lower() in common_words or 
+        len(clean_text.split()) == 1 and clean_text.lower() in common_words):
+        return text
+    
+    # Create a search URL
+    search_url = f"https://en.wikipedia.org/w/index.php?search={clean_text.replace(' ', '+')}"
+    return f'<a href="{search_url}" data-importance="{importance}">{text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -340,150 +301,28 @@ def add_wiki_links(text):
     final_text = '. '.join(result).strip()
     return f'<div>{final_text}</div>'
 
-def validate_wiki_content(text, title):
-    """Validate that the Wikipedia content is relevant to the query."""
-    try:
-        # Skip literary/fictional content
-        literary_terms = {'novel', 'fiction', 'literary', 'literature', 'story', 'stories', 'author', 'writer', 'poem', 'poetry'}
-        if any(term in title.lower() for term in literary_terms) or any(term in text.lower()[:200] for term in literary_terms):
-            return False
-            
-        # Extract key terms from the content
-        doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
-        content_entities = set([ent.text.lower() for ent in doc.ents])
-        
-        # Calculate relevance scores
-        term_matches = sum(term.lower() in text.lower() for term in key_terms)
-        entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
-        
-        # Check for historical indicators
-        historical_terms = {'history', 'century', 'ancient', 'period', 'era', 'historical', 'invention', 'development', 'discovery'}
-        has_historical_context = any(term in text.lower() for term in historical_terms)
-        
-        # Require both term matches and historical context
-        is_relevant = (term_matches > 0 or entity_overlap > 0) and has_historical_context
-        
-        return is_relevant
-        
-    except Exception as e:
-        return False  # Reject content if validation fails
-
-def process_article(title, wiki_content, found_articles):
-    """Process a Wikipedia article and add it to found_articles if relevant."""
-    try:
-        # Get article content
-        page = wikipedia.page(title, auto_suggest=False)
-        
-        # Get summary and validate
-        summary = page.summary
-        if validate_wiki_content(summary, title):
-            # Initialize article data
-            found_articles[title] = {
-                'summary': summary,
-                'used_sections': []
-            }
-            
-            # Add summary to wiki_content with relevance score
-            wiki_content.append((summary, 5))  # Summary gets base score of 5
-            
-            # Process sections
-            for section in page.sections:
-                try:
-                    section_content = page.section(section)
-                    if section_content and validate_wiki_content(section_content, section):
-                        found_articles[title]['used_sections'].append({
-                            'name': section,
-                            'content': section_content
-                        })
-                        wiki_content.append((section_content, 3))  # Sections get base score of 3
-                except:
-                    continue
-                    
-    except Exception as e:
-        pass  # Skip articles that can't be processed
-
 def get_wikipedia_content(query):
     """Search Wikipedia and get content for the query."""
     try:
-        # Create a placeholder for showing search progress
-        search_progress = st.empty()
+        # Search for the query
+        search_results = wikipedia.search(query, results=3)
         
-        # Clean up query and extract key terms
-        search_progress.markdown("🔍 Analyzing query and extracting key terms...")
-        doc = nlp(query)
-        
-        # Extract dates and years
-        years = set()
-        for ent in doc.ents:
-            if ent.label_ == 'DATE':
-                year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
-                if year_match:
-                    years.add(year_match.group(0))
-        
-        # Build search terms with historical context
-        global key_terms
-        key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
-        search_progress.markdown("📚 Building search strategy...")
-        
-        # Generate search terms
-        search_terms = []
-        
-        # If we have a year, add year-based searches
-        if years:
-            for year in years:
-                search_terms.extend([
-                    f"{year} in history",
-                    f"historical events {year}",
-                    f"{year} history"
-                ])
-                # Combine year with key terms
-                for term in key_terms:
-                    search_terms.append(f"{term} {year}")
-        
-        # Add general search terms
-        search_terms.extend([
-            query + " historical event",
-            query + " in history",
-            query
-        ] + key_terms)
-        
-        # Remove duplicates while preserving order
-        search_terms = list(dict.fromkeys(search_terms))
-        
-        # Process main search results
+        if not search_results:
+            return None
+            
         wiki_content = []
-        seen_content = set()
-        found_articles = {}
-        total_content_found = 0
         
-        for term in search_terms:
+        # Get content for each result
+        for title in search_results:
             try:
-                search_progress.markdown(f"🔍 Searching for: {term}")
-                search_results = wikipedia.search(term, results=8)
-                for title in search_results:
-                    if title not in found_articles:  # Only process new articles
-                        process_article(title, wiki_content, found_articles)
-                        if title in found_articles:  # If article was added
-                            total_content_found += 1
-                    
-                if total_content_found >= 3 and any(score >= 5 for _, score in wiki_content):
-                    break
-                    
+                page = wiki.page(title)
+                if page.exists():
+                    wiki_content.append(page.summary[0:500])
             except Exception as e:
                 continue
         
-        # Sort content by relevance
-        wiki_content.sort(key=lambda x: x[1], reverse=True)
-        
-        # Show final search completion message
-        search_progress.markdown(f"""✅ Search complete
-Found content from {total_content_found} sources""")
-        time.sleep(2)
-        search_progress.empty()
-        
         if wiki_content:
-            st.session_state['last_wiki_articles'] = found_articles
-            return "\n\n".join(content for content, _ in wiki_content[:8])
+            return "\n\n".join(wiki_content)
         return None
     except Exception as e:
         st.error(f"Error searching Wikipedia: {str(e)}")
@@ -509,59 +348,31 @@ def get_deepseek_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
+            # Get last few exchanges, but limit to keep context manageable
+            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
+                # Clean up any HTML/markdown from previous responses
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
-
-Wikipedia Content:
-{wiki_content}
-
-Previous Conversation:
+        full_prompt = f"""Context from Wikipedia: {wiki_content}
 {conversation_context}
-
 Current Question: {prompt}
 
-REQUIREMENTS:
-1. Use ONLY information from the provided Wikipedia content
-2. Mark important terms using these exact markers:
-   - Use [1][term] for major historical figures, key events, and primary concepts
-   - Use [2][term] for dates, places, and technical terms
-   - Use [3][term] for supporting concepts and contextual details
-3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+Respond in two parts:
 
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
+- [1][term] for major historical figures, key events, primary concepts
+- [2][term] for dates, places, technical terms
+- [3][term] for related concepts and supporting details
 
-        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Focus on historical facts, dates, and concrete developments. Never include metaphorical interpretations or literary references.
+PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Your task is to:
-1. Use ONLY factual information from the provided Wikipedia content
-2. Focus on historical developments, inventions, and concrete events
-3. Avoid metaphors, symbolism, or literary interpretations
-4. Mark important concepts with:
-   - [1][text] for major historical developments, inventions, and key figures
-   - [2][text] for specific dates, places, and technical terms
-   - [3][text] for additional historical context and details (use sparingly)
-
-Keep your response natural and flowing, but always grounded in historical facts."""
-
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": full_prompt
-            }
-        ]
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
 
         try:
             response = requests.post(
@@ -569,40 +380,15 @@ Keep your response natural and flowing, but always grounded in historical facts.
                 headers=headers,
                 json={
                     'model': 'deepseek-chat',
-                    'messages': messages
+                    'messages': [{'role': 'user', 'content': full_prompt}]
                 }
             )
             response_text = response.json()['choices'][0]['message']['content']
             
             # Split response and suggestions
-            parts = response_text.split('\n')
-            main_response = []
-            suggestions = []
-            
-            for part in parts:
-                if part.strip().startswith('[SUGGESTION]'):
-                    suggestions.append(part.replace('[SUGGESTION]', '').strip())
-                else:
-                    main_response.append(part)
-            
-            main_response = ' '.join(main_response).strip()
-            
-            # Store exactly 3 suggestions in session state
-            if 'suggestions' not in st.session_state:
-                st.session_state.suggestions = []
-            st.session_state.suggestions = suggestions[:3]
-            
-            # If we don't have enough suggestions, generate some based on found articles
-            if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
-                article_titles = list(st.session_state['last_wiki_articles'].keys())
-                while len(st.session_state.suggestions) < 3 and article_titles:
-                    title = random.choice(article_titles)
-                    st.session_state.suggestions.append(f"Tell me more about {title}")
-                    article_titles.remove(title)
-            
-            # If still not enough suggestions, add generic ones
-            while len(st.session_state.suggestions) < 3:
-                st.session_state.suggestions.append("What other historical inventions were significant during this period?")
+            parts = response_text.split('[SUGGESTION]')
+            main_response = parts[0].strip()
+            suggestions = [s.strip() for s in parts[1:] if s.strip()]
             
             # Clean up formatting artifacts
             main_response = re.sub(r'PART \d:', '', main_response)
@@ -610,7 +396,7 @@ Keep your response natural and flowing, but always grounded in historical facts.
             main_response = re.sub(r'\d\. ', '', main_response)
             main_response = re.sub(r'Follow-Up Questions:', '', main_response)
             
-            # Process URLs
+            # Process the main response
             main_response = re.sub(r'https?://\S+', '', main_response)
             main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
             
@@ -619,16 +405,18 @@ Keep your response natural and flowing, but always grounded in historical facts.
                 main_response = re.sub(
                     f'\\[{level}\\]\\[([^\\]]+)\\]',
                     lambda m: create_wiki_link(m.group(1), 
-                        'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
                     main_response
                 )
-            
-            # Remove any remaining instances of the word "term"
-            main_response = re.sub(r'\bterm\b', '', main_response)
             
             # Clean up extra spaces and normalize whitespace
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
+            
+            # Store suggestions in session state
+            if 'suggestions' not in st.session_state:
+                st.session_state.suggestions = []
+            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
             
             return f'<div>{main_response}</div>'
         except Exception as e:
@@ -656,42 +444,45 @@ def get_groq_response(prompt, wiki_content):
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
+        
+        # Combine wiki content with user's question and conversation context
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response about the following topic, with careful attention to marking important terms.
 
-        # Create a more explicit system prompt for formatting
-        system_prompt = """You are a historical chatbot. Format your response exactly as follows:
-
-1. Use these exact markers for important terms:
-   [1][text] = major historical figures/events
-   [2][text] = dates and places
-   [3][text] = supporting details
-
-2. End with exactly 3 follow-up questions, each on a new line starting with [SUGGESTION]
-
-Example format:
-[1][World War II] began in [2][1939] when [1][Nazi Germany] invaded [2][Poland]. [3][The invasion used blitzkrieg tactics].
-
-[SUGGESTION] Question 1?
-[SUGGESTION] Question 2?
-[SUGGESTION] Question 3?"""
-
-        # Combine wiki content with user's question
-        full_prompt = f"""Use ONLY this Wikipedia content to answer the question:
-
-{wiki_content}
-
-Previous Conversation:
+Context from Wikipedia: {wiki_content}
 {conversation_context}
+Current Question: {prompt}
 
-Question: {prompt}
+CRITICAL FORMATTING REQUIREMENTS:
+1. You MUST mark ALL important terms using these exact markers:
+   - Use [1][term] for major historical figures (e.g., [1][Julius Caesar]), key events (e.g., [1][Battle of Waterloo]), and primary concepts
+   - Use [2][term] for dates (e.g., [2][44 BC]), places (e.g., [2][Roman Empire]), and technical terms
+   - Use [3][term] for supporting concepts and contextual details
 
-Remember to use [1][text], [2][text], [3][text] markers and end with [SUGGESTION] questions."""
+2. Example of properly marked text:
+"[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics] during the campaign."
+
+3. Follow these marking rules strictly:
+   - Mark EVERY important term - aim for at least 2-3 terms per sentence
+   - Use [1] for the most important 25% of terms
+   - Use [2] for the next 50% of terms
+   - Use [3] for the remaining 25% of terms
+   - Never mark the same term twice
+   - Always include the full term in the brackets
+
+4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+
+Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
         completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": system_prompt
+                    "content": """You are a knowledgeable historical chatbot. Your primary task is to mark important terms with the correct importance level:
+- [1][term] for major figures and primary concepts (25% of terms)
+- [2][term] for dates, places, and technical terms (50% of terms)
+- [3][term] for supporting details (25% of terms)
+Mark EVERY important term, and ensure proper hierarchy through your marking."""
                 },
                 {
                     "role": "user",
@@ -699,41 +490,16 @@ Remember to use [1][text], [2][text], [3][text] markers and end with [SUGGESTION
                 }
             ],
             temperature=0.7,
-            max_tokens=2048,
+            max_tokens=4096,
             top_p=1
         )
         
         response_text = completion.choices[0].message.content.strip()
         
         # Split response and suggestions
-        parts = response_text.split('\n')
-        main_response = []
-        suggestions = []
-        
-        for part in parts:
-            if part.strip().startswith('[SUGGESTION]'):
-                suggestions.append(part.replace('[SUGGESTION]', '').strip())
-            else:
-                main_response.append(part)
-        
-        main_response = ' '.join(main_response).strip()
-        
-        # Store exactly 3 suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
-        st.session_state.suggestions = suggestions[:3]
-        
-        # If we don't have enough suggestions, generate some based on found articles
-        if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
-            article_titles = list(st.session_state['last_wiki_articles'].keys())
-            while len(st.session_state.suggestions) < 3 and article_titles:
-                title = random.choice(article_titles)
-                st.session_state.suggestions.append(f"Tell me more about {title}")
-                article_titles.remove(title)
-        
-        # If still not enough suggestions, add generic ones
-        while len(st.session_state.suggestions) < 3:
-            st.session_state.suggestions.append("What other historical inventions were significant during this period?")
+        parts = response_text.split('[SUGGESTION]')
+        main_response = parts[0].strip()
+        suggestions = [s.strip() for s in parts[1:] if s.strip()]
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -741,7 +507,7 @@ Remember to use [1][text], [2][text], [3][text] markers and end with [SUGGESTION
         main_response = re.sub(r'\d\. ', '', main_response)
         main_response = re.sub(r'Follow-Up Questions:', '', main_response)
         
-        # Process URLs
+        # Process the main response
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
@@ -750,74 +516,22 @@ Remember to use [1][text], [2][text], [3][text] markers and end with [SUGGESTION
             main_response = re.sub(
                 f'\\[{level}\\]\\[([^\\]]+)\\]',
                 lambda m: create_wiki_link(m.group(1), 
-                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
                 main_response
             )
-        
-        # Remove any remaining instances of the word "term"
-        main_response = re.sub(r'\bterm\b', '', main_response)
         
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
+        # Store suggestions in session state
+        if 'suggestions' not in st.session_state:
+            st.session_state.suggestions = []
+        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
+        
         return f'<div>{main_response}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
-
-def validate_content(prompt, response_text):
-    """Validate that the AI response stays on topic and relevant to the prompt."""
-    try:
-        # Extract key terms from the prompt
-        prompt_doc = nlp(prompt)
-        prompt_entities = set([ent.text.lower() for ent in prompt_doc.ents])
-        prompt_nouns = set([token.text.lower() for token in prompt_doc if token.pos_ in ['PROPN', 'NOUN']])
-        prompt_key_terms = prompt_entities.union(prompt_nouns)
-        
-        # Add historical context terms
-        historical_terms = {'history', 'century', 'period', 'era', 'empire', 'kingdom', 'state', 'nation', 'population', 'people'}
-        prompt_key_terms.update(historical_terms)
-        
-        # Extract key terms from the response
-        response_doc = nlp(response_text)
-        response_entities = set([ent.text.lower() for ent in response_doc.ents])
-        
-        # Check if the response contains entities not related to the prompt
-        unrelated_entities = []
-        for entity in response_entities:
-            # Skip common words, short terms, and historical context terms
-            if (len(entity) < 4 or 
-                entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'} or
-                entity.lower() in historical_terms):
-                continue
-                
-            # Check if this entity is related to any prompt terms
-            is_related = False
-            for prompt_term in prompt_key_terms:
-                if (prompt_term in entity.lower() or 
-                    entity.lower() in prompt_term or 
-                    prompt_term.split()[-1] in entity.lower() or
-                    entity.lower().split()[-1] in prompt_term):
-                    is_related = True
-                    break
-            
-            if not is_related:
-                unrelated_entities.append(entity)
-        
-        # Only flag as invalid if there are multiple unrelated entities
-        if len(unrelated_entities) > 3:
-            correction_prompt = f"""Your previous response included too many unrelated topics: {', '.join(unrelated_entities[:3])}...
-            
-Please provide a new response that focuses ONLY on {prompt} without mentioning unrelated people, events, or concepts.
-Use the same Wikipedia content but stay strictly focused on the topic."""
-            
-            return False, correction_prompt
-            
-        return True, None
-        
-    except Exception as e:
-        st.error(f"Error validating content: {str(e)}")
-        return True, None  # Continue with original response if validation fails
 
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
@@ -825,72 +539,10 @@ def get_ai_response(prompt, wiki_content):
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
-        # Get initial response
         if model_choice == "Deepseek (Requires API Key)":
-            response = get_deepseek_response(prompt, wiki_content)
+            return get_deepseek_response(prompt, wiki_content)
         else:
-            response = get_groq_response(prompt, wiki_content)
-        
-        # Extract text content from HTML response
-        clean_response = re.sub(r'<[^>]+>', '', response)
-        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
-        
-        # Validate content
-        is_valid, correction_prompt = validate_content(prompt, clean_response)
-        
-        # If content is not valid, get a new response
-        if not is_valid and correction_prompt:
-            if model_choice == "Deepseek (Requires API Key)":
-                response = get_deepseek_response(correction_prompt, wiki_content)
-            else:
-                response = get_groq_response(correction_prompt, wiki_content)
-            
-        # Add sources to the response if we have them
-        if 'last_wiki_articles' in st.session_state:
-            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem;">'
-            sources_html += '<details style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;">'
-            sources_html += '<summary style="padding: 1rem; cursor: pointer; user-select: none; font-weight: 500; color: rgba(255, 255, 255, 0.8);">Content Used from Wikipedia</summary>'
-            sources_html += '<div style="max-height: 300px; overflow-y: auto; padding: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">'
-            
-            for title, data in st.session_state['last_wiki_articles'].items():
-                # Only show articles that contributed content
-                if data['summary'] or data['used_sections']:
-                    sources_html += f'<div style="margin-bottom: 1.5rem;">'
-                    # Article title with link
-                    sources_html += f'<div style="margin-bottom: 0.5rem;">'
-                    sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a>'
-                    sources_html += '</div>'
-                    
-                    # Main summary
-                    if data['summary']:
-                        sources_html += '<div style="margin-left: 1rem; margin-bottom: 0.5rem;">'
-                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>From main article:</em></div>'
-                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; line-height: 1.4;">{data["summary"][:200]}...</div>'
-                        sources_html += '</div>'
-                    
-                    # Used sections
-                    if data['used_sections']:
-                        sources_html += '<div style="margin-left: 1rem;">'
-                        sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>Additional sections used:</em></div>'
-                        for section in data['used_sections']:
-                            sources_html += f'<div style="margin-bottom: 0.5rem;">'
-                            sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.2rem;">• {section["name"]}</div>'
-                            sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; margin-left: 0.5rem; line-height: 1.4;">{section["content"][:150]}...</div>'
-                            sources_html += '</div>'
-                        sources_html += '</div>'
-                    
-                    sources_html += '</div>'
-            
-            sources_html += '</div></details></div>'
-            
-            # Add sources to the response while preserving any existing HTML
-            if response.endswith('</div>'):
-                response = response[:-6] + sources_html + '</div>'
-            else:
-                response += sources_html
-                
-        return response
-            
+            return get_groq_response(prompt, wiki_content)
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
