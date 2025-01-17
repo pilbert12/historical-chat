@@ -61,7 +61,7 @@ def load_conversation(conv_id):
         if conv and conv.user_id == st.session_state.user_id:
             st.session_state.messages = conv.messages or []
             st.session_state.current_conversation_id = conv_id
-            st.session_state.suggestions = conv.suggestions or []
+            st.session_state.suggestions = []
     finally:
         db.close()
 
@@ -82,7 +82,6 @@ def save_conversation():
                 conv = db.query(Conversation).get(st.session_state.current_conversation_id)
                 if conv:
                     conv.messages = st.session_state.messages
-                    conv.suggestions = st.session_state.suggestions
                     conv.updated_at = datetime.utcnow()
                     db.commit()
                     return
@@ -90,8 +89,7 @@ def save_conversation():
             # Create new conversation
             conv = Conversation(
                 user_id=st.session_state.user_id,
-                messages=st.session_state.messages,
-                suggestions=st.session_state.suggestions
+                messages=st.session_state.messages
             )
             db.add(conv)
             db.commit()
@@ -120,7 +118,6 @@ def login_user(username, password):
             ).order_by(Conversation.updated_at.desc()).first()
             if last_conv:
                 st.session_state.messages = last_conv.messages or []
-                st.session_state.suggestions = last_conv.suggestions or []
                 st.session_state.current_conversation_id = last_conv.id
             return True
         return False
@@ -861,9 +858,9 @@ for idx, message in enumerate(st.session_state.messages):
                 # Use a unique key combining message index and suggestion index
                 button_key = f"suggestion_{idx}_{i}"
                 if col.button(clean_suggestion, key=button_key):
-                    # Add user's suggestion click as a message
+                    # Add user message
                     st.session_state.messages.append({"role": "user", "content": clean_suggestion})
-                    save_conversation()  # Save after user's suggestion click
+                    save_conversation()  # Save after user message
                     
                     # Get and add AI response
                     wiki_content = get_wikipedia_content(clean_suggestion)
