@@ -23,41 +23,195 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 # Add custom CSS
 st.markdown("""
 <style>
+    /* Header styling */
+    .stApp > header {
+        background-color: transparent;
+    }
+    
+    /* Title container */
+    h1:first-of-type {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 300;
+        letter-spacing: -0.5px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 2.8rem !important;
+        margin-bottom: 0.2rem;
+        line-height: 1.2;
+    }
+    
+    /* Subtitle styling */
+    .stApp > div:first-child > div:nth-child(2) p {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        margin-bottom: 3rem;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 0.2px;
+    }
+
+    /* Chat message icons */
+    .stChatMessage [data-testid="stChatMessageAvatar"] {
+        background: transparent !important;
+        padding: 0.5rem;
+    }
+
+    /* User icon */
+    .stChatMessage.user [data-testid="stChatMessageAvatar"] {
+        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%) !important;
+        border-radius: 12px;
+    }
+
+    /* Assistant icon */
+    .stChatMessage.assistant [data-testid="stChatMessageAvatar"] {
+        background: linear-gradient(135deg, #FFB86C 0%, #FFD93D 100%) !important;
+        border-radius: 12px;
+    }
+
+    /* Chat message container */
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 1rem;
+        margin: 1rem 0;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .stChatMessage:hover {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Main content width */
+    .stApp > div:first-child {
+        max-width: 1200px !important;
+        padding-left: 5rem;
+        padding-right: 5rem;
+    }
+    
+    /* Base text style */
+    .stChatMessage div.stMarkdown {
+        color: rgba(250, 250, 250, 0.6) !important;
+        line-height: 1.6;
+        max-width: 100% !important;
+    }
+    
+    /* Make chat messages wider */
+    .stChatMessage {
+        max-width: 100% !important;
+    }
+    
+    .stChatMessage > div {
+        max-width: 100% !important;
+    }
+
     /* Link styling */
-    .stMarkdown a {
+    .stChatMessage div.stMarkdown a {
         color: inherit !important;
         text-decoration: none !important;
-        transition: opacity 0.2s ease;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
     }
     
-    /* Importance-based text brightness */
-    .stMarkdown a[data-importance="important"] {
-        opacity: 1.0 !important;
-    }
-    .stMarkdown a[data-importance="secondary"] {
-        opacity: 0.8 !important;
-    }
-    .stMarkdown a[data-importance="tertiary"] {
-        opacity: 0.6 !important;
+    /* Importance-based text styling */
+    .stChatMessage div.stMarkdown a[data-importance="important"] {
+        color: rgba(255, 255, 255, 0.95) !important;
+        font-weight: 500;
     }
     
-    /* Hover effects */
-    .stMarkdown a:hover {
-        opacity: 1.0 !important;
-        text-decoration: underline !important;
+    .stChatMessage div.stMarkdown a[data-importance="secondary"] {
+        color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    /* Button styling */
-    .stButton button {
-        background-color: rgba(255, 255, 255, 0.05);
+    .stChatMessage div.stMarkdown a[data-importance="tertiary"] {
+        color: rgba(255, 255, 255, 0.75) !important;
+    }
+    
+    /* Subtle hover effect for links */
+    .stChatMessage div.stMarkdown a:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+    
+    /* Style the buttons container */
+    div[data-testid="column"] > div {
+        display: flex;
+        justify-content: center;
+        margin-top: 1.5rem;
+    }
+    
+    /* Style the buttons */
+    div[data-testid="column"] button {
+        background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.8);
-        transition: all 0.2s ease;
+        color: rgba(255, 255, 255, 0.75);
+        transition: all 0.2s ease-in-out;
+        min-height: unset;
+        padding: 0.5rem 1rem;
+        width: auto !important;
+        flex: 1;
+        border-radius: 8px;
     }
     
-    .stButton button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
+    div[data-testid="column"] button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.9);
         border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Sources section styling */
+    details {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    details summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+    }
+    
+    details summary::-webkit-details-marker {
+        display: none;
+    }
+    
+    details summary::before {
+        content: "▶";
+        margin-right: 0.5rem;
+        transition: transform 0.2s ease-in-out;
+        font-size: 0.8em;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    details[open] summary::before {
+        transform: rotate(90deg);
+    }
+    
+    details summary:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Scrollbar styling for sources content */
+    details > div {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+    }
+    
+    details > div::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    details > div::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+    }
+    
+    details > div::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+    }
+    
+    details > div::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
     }
 </style>
 """, unsafe_allow_html=True)
