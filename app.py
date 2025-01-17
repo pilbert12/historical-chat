@@ -560,18 +560,27 @@ REQUIREMENTS:
 
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
-        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Focus on historical facts, dates, and concrete developments. Never include metaphorical interpretations or literary references.
+        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Your response should be clear, focused, and well-structured.
 
-Your task is to:
-1. Use ONLY factual information from the provided Wikipedia content
-2. Focus on historical developments, inventions, and concrete events
-3. Avoid metaphors, symbolism, or literary interpretations
-4. Mark important concepts with:
-   - [1][text] for major historical developments, inventions, and key figures
-   - [2][text] for specific dates, places, and technical terms
-   - [3][text] for additional historical context and details (use sparingly)
+IMPORTANCE MARKING RULES:
+1. [1][text] - Use ONLY for:
+   - Major historical figures (e.g., key leaders, rulers)
+   - Primary historical events (e.g., wars, revolutions)
+   - Defining concepts (e.g., major political movements)
+2. [2][text] - Use ONLY for:
+   - Specific dates and time periods
+   - Geographic locations
+   - Important organizations
+3. [3][text] - Use SPARINGLY for:
+   - Supporting details that provide crucial context
+   - Only mark the first occurrence of any term
 
-Keep your response natural and flowing, but always grounded in historical facts."""
+GENERAL RULES:
+- Never mark common words or phrases
+- Mark each important term only ONCE
+- Avoid marking prepositions, articles, or connecting words
+- Keep responses focused and chronological
+- Use only factual information from the provided sources"""
 
         messages=[
             {
@@ -792,44 +801,38 @@ def validate_content(prompt, response_text):
         prompt_key_terms = prompt_entities.union(prompt_nouns)
         
         # Add historical context terms
-        historical_terms = {'history', 'century', 'period', 'era', 'empire', 'kingdom', 'state', 'nation', 'population', 'people'}
+        historical_terms = {'history', 'century', 'period', 'era', 'empire', 'kingdom', 'state', 'nation'}
         prompt_key_terms.update(historical_terms)
         
-        # Extract key terms from the response
-        response_doc = nlp(response_text)
-        response_entities = set([ent.text.lower() for ent in response_doc.ents])
+        # Count importance markers
+        importance_counts = {
+            1: len(re.findall(r'\[1\]\[([^\]]+)\]', response_text)),
+            2: len(re.findall(r'\[2\]\[([^\]]+)\]', response_text)),
+            3: len(re.findall(r'\[3\]\[([^\]]+)\]', response_text))
+        }
         
-        # Check if the response contains entities not related to the prompt
-        unrelated_entities = []
-        for entity in response_entities:
-            # Skip common words, short terms, and historical context terms
-            if (len(entity) < 4 or 
-                entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'} or
-                entity.lower() in historical_terms):
-                continue
-                
-            # Check if this entity is related to any prompt terms
-            is_related = False
-            for prompt_term in prompt_key_terms:
-                if (prompt_term in entity.lower() or 
-                    entity.lower() in prompt_term or 
-                    prompt_term.split()[-1] in entity.lower() or
-                    entity.lower().split()[-1] in prompt_term):
-                    is_related = True
-                    break
-            
-            if not is_related:
-                unrelated_entities.append(entity)
-        
-        # Only flag as invalid if there are multiple unrelated entities
-        if len(unrelated_entities) > 3:
-            correction_prompt = f"""Your previous response included too many unrelated topics: {', '.join(unrelated_entities[:3])}...
-            
-Please provide a new response that focuses ONLY on {prompt} without mentioning unrelated people, events, or concepts.
-Use the same Wikipedia content but stay strictly focused on the topic."""
-            
+        # Check for overuse of importance markers
+        if importance_counts[1] > 5 or importance_counts[2] > 8 or importance_counts[3] > 3:
+            correction_prompt = """Your previous response overused importance markers. Please provide a new response with more selective marking:
+            - [1][text]: Only for 3-5 major historical elements
+            - [2][text]: Only for 5-8 key dates and places
+            - [3][text]: No more than 2-3 supporting details
+            Keep the same factual content but be more selective with marking."""
             return False, correction_prompt
-            
+        
+        # Check for duplicate terms
+        marked_terms = re.findall(r'\[\d\]\[([^\]]+)\]', response_text)
+        term_counts = {}
+        for term in marked_terms:
+            term_lower = term.lower()
+            term_counts[term_lower] = term_counts.get(term_lower, 0) + 1
+            if term_counts[term_lower] > 1:
+                correction_prompt = f"""Your previous response marked some terms multiple times. Please provide a new response marking each term only once:
+                - Mark only the first occurrence of each term
+                - Keep the same factual content but avoid duplicate marking
+                - Ensure a natural flow while maintaining historical accuracy"""
+                return False, correction_prompt
+        
         return True, None
         
     except Exception as e:
