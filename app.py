@@ -24,22 +24,17 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 st.markdown("""
 <style>
     /* Importance-based text styling */
-    .stMarkdown .importance-1 {
+    .stMarkdown span[data-importance="important"] {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .stMarkdown .importance-2 {
+    .stMarkdown span[data-importance="secondary"] {
         color: rgba(255, 255, 255, 0.75) !important;
     }
     
-    .stMarkdown .importance-3 {
-        color: rgba(255, 255, 255, 0.6) !important;
-    }
-    
-    /* Base text color for unmarked text */
-    .stMarkdown p {
-        color: rgba(255, 255, 255, 0.85) !important;
+    .stMarkdown span[data-importance="tertiary"] {
+        color: rgba(255, 255, 255, 0.55) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -64,6 +59,11 @@ def load_spacy_model():
 
 nlp = load_spacy_model()
 
+def create_importance_span(text, importance):
+    """Create a span with proper styling based on importance."""
+    clean_text = text.strip()
+    return f'<span data-importance="{importance}">{clean_text}</span>'
+
 def add_importance_styling(text):
     """Process text and add importance-based styling."""
     # Clean up any existing formatting
@@ -71,11 +71,11 @@ def add_importance_styling(text):
     text = re.sub(r'\s+', ' ', text)
     
     # Process importance markers with non-greedy matching and proper boundary handling
-    text = re.sub(r'\[1\]\[([^\]]+?)\](?=\s|$|[.,!?])', r'<span class="importance-1">\1</span>', text)
-    text = re.sub(r'\[2\]\[([^\]]+?)\](?=\s|$|[.,!?])', r'<span class="importance-2">\1</span>', text)
-    text = re.sub(r'\[3\]\[([^\]]+?)\](?=\s|$|[.,!?])', r'<span class="importance-3">\1</span>', text)
+    text = re.sub(r'\[1\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_importance_span(m.group(1), 'important'), text)
+    text = re.sub(r'\[2\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_importance_span(m.group(1), 'secondary'), text)
+    text = re.sub(r'\[3\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_importance_span(m.group(1), 'tertiary'), text)
     
-    # Clean up any remaining markers
+    # Clean up any remaining markers and whitespace
     text = re.sub(r'\[\d+\]', '', text)
     text = re.sub(r'\s+', ' ', text)
     
@@ -458,7 +458,7 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Apply importance styling
+        # Apply importance-based styling
         html_response = add_importance_styling(response)
         
         # Add sources section
