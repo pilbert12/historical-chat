@@ -773,6 +773,10 @@ def validate_content(prompt, response_text):
         prompt_nouns = set([token.text.lower() for token in prompt_doc if token.pos_ in ['PROPN', 'NOUN']])
         prompt_key_terms = prompt_entities.union(prompt_nouns)
         
+        # Add historical context terms
+        historical_terms = {'history', 'century', 'period', 'era', 'empire', 'kingdom', 'state', 'nation', 'population', 'people'}
+        prompt_key_terms.update(historical_terms)
+        
         # Extract key terms from the response
         response_doc = nlp(response_text)
         response_entities = set([ent.text.lower() for ent in response_doc.ents])
@@ -780,8 +784,10 @@ def validate_content(prompt, response_text):
         # Check if the response contains entities not related to the prompt
         unrelated_entities = []
         for entity in response_entities:
-            # Skip common words and short terms
-            if len(entity) < 4 or entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'}:
+            # Skip common words, short terms, and historical context terms
+            if (len(entity) < 4 or 
+                entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'} or
+                entity.lower() in historical_terms):
                 continue
                 
             # Check if this entity is related to any prompt terms
@@ -789,17 +795,17 @@ def validate_content(prompt, response_text):
             for prompt_term in prompt_key_terms:
                 if (prompt_term in entity.lower() or 
                     entity.lower() in prompt_term or 
-                    prompt_term.split()[-1] in entity.lower() or  # Check last word of multi-word terms
-                    entity.lower().split()[-1] in prompt_term):  # Check last word of multi-word entities
+                    prompt_term.split()[-1] in entity.lower() or
+                    entity.lower().split()[-1] in prompt_term):
                     is_related = True
                     break
             
             if not is_related:
                 unrelated_entities.append(entity)
         
-        if unrelated_entities:
-            # Create a new prompt to get a more focused response
-            correction_prompt = f"""Your previous response included unrelated topics: {', '.join(unrelated_entities)}
+        # Only flag as invalid if there are multiple unrelated entities
+        if len(unrelated_entities) > 3:
+            correction_prompt = f"""Your previous response included too many unrelated topics: {', '.join(unrelated_entities[:3])}...
             
 Please provide a new response that focuses ONLY on {prompt} without mentioning unrelated people, events, or concepts.
 Use the same Wikipedia content but stay strictly focused on the topic."""
