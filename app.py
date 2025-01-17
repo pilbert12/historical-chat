@@ -18,6 +18,8 @@ if 'user_id' not in st.session_state:
     st.session_state.user_id = None
 if 'username' not in st.session_state:
     st.session_state.username = None
+if 'current_conversation_id' not in st.session_state:
+    st.session_state.current_conversation_id = None
 
 def login_user(username, password):
     """Login user and return success status."""
@@ -76,23 +78,25 @@ def save_api_keys():
 
 def save_conversation():
     """Save current conversation to database."""
-    if st.session_state.user_id and 'messages' in st.session_state:
+    if st.session_state.user_id and 'messages' in st.session_state and st.session_state.messages:
         db = get_db_session()
         try:
-            conv = db.query(Conversation).filter(
-                Conversation.user_id == st.session_state.user_id
-            ).order_by(Conversation.updated_at.desc()).first()
+            if st.session_state.current_conversation_id:
+                conv = db.query(Conversation).get(st.session_state.current_conversation_id)
+                if conv:
+                    conv.messages = st.session_state.messages
+                    conv.updated_at = datetime.utcnow()
+                    db.commit()
+                    return
             
-            if conv:
-                conv.messages = st.session_state.messages
-                conv.updated_at = datetime.utcnow()
-            else:
-                conv = Conversation(
-                    user_id=st.session_state.user_id,
-                    messages=st.session_state.messages
-                )
-                db.add(conv)
+            # Create new conversation
+            conv = Conversation(
+                user_id=st.session_state.user_id,
+                messages=st.session_state.messages
+            )
+            db.add(conv)
             db.commit()
+            st.session_state.current_conversation_id = conv.id
         finally:
             db.close()
 
@@ -693,6 +697,31 @@ with st.sidebar:
             logout_user()
             st.rerun()
         
+        # Conversation Management
+        st.title("Conversations")
+        if st.button("Start New Conversation", type="primary"):
+            create_new_conversation()
+            st.rerun()
+        
+        # List previous conversations
+        conversations = get_user_conversations()
+        if conversations:
+            st.write("Previous Conversations:")
+            for conv in conversations:
+                # Get the first message as the title, or use a default
+                title = "Empty Conversation"
+                if conv.messages and len(conv.messages) > 0:
+                    first_msg = conv.messages[0]["content"]
+                    title = first_msg[:50] + "..." if len(first_msg) > 50 else first_msg
+                
+                col1, col2 = st.columns([0.7, 0.3])
+                with col1:
+                    if st.button(f"📝 {title}", key=f"conv_{conv.id}"):
+                        load_conversation(conv.id)
+                        st.rerun()
+                with col2:
+                    st.write(conv.updated_at.strftime("%Y-%m-%d"))
+        
         st.title("Setup")
         st.session_state['model_choice'] = st.selectbox(
             "Choose AI Model:",
@@ -722,15 +751,15 @@ with st.sidebar:
                 st.session_state['GROQ_API_KEY'] = api_key
                 save_api_keys()
                 st.success("Groq API key saved!")
-            
-            st.title("About")
-            st.write("""
-            This Historical Chat Bot combines information from Wikipedia with AI-powered insights 
-            to provide comprehensive answers to your historical questions.
-            
-            Ask any question about history, and I'll provide detailed answers with clickable 
-            Wikipedia links for key people, places, events, and concepts.
-            """)
+        
+        st.title("About")
+        st.write("""
+        This Historical Chat Bot combines information from Wikipedia with AI-powered insights 
+        to provide comprehensive answers to your historical questions.
+        
+        Ask any question about history, and I'll provide detailed answers with clickable 
+        Wikipedia links for key people, places, events, and concepts.
+        """)
 
 def get_audio_base64(text):
     """Generate audio from text and return as base64."""
@@ -754,6 +783,37 @@ def get_audio_base64(text):
         st.error(f"Error generating audio: {str(e)}")
         return None
 
+def get_user_conversations():
+    """Get all conversations for the current user."""
+    if not st.session_state.user_id:
+        return []
+    db = get_db_session()
+    try:
+        conversations = db.query(Conversation).filter(
+            Conversation.user_id == st.session_state.user_id
+        ).order_by(Conversation.updated_at.desc()).all()
+        return conversations
+    finally:
+        db.close()
+
+def load_conversation(conv_id):
+    """Load a specific conversation."""
+    db = get_db_session()
+    try:
+        conv = db.query(Conversation).get(conv_id)
+        if conv and conv.user_id == st.session_state.user_id:
+            st.session_state.messages = conv.messages
+            st.session_state.current_conversation_id = conv_id
+    finally:
+        db.close()
+
+def create_new_conversation():
+    """Create a new conversation."""
+    save_conversation()  # Save current conversation if exists
+    st.session_state.messages = []
+    st.session_state.suggestions = []
+    st.session_state.current_conversation_id = None
+    
 # Display chat history
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
