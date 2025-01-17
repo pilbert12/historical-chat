@@ -343,6 +343,11 @@ def add_wiki_links(text):
 def validate_wiki_content(text, title):
     """Validate that the Wikipedia content is relevant to the query."""
     try:
+        # Skip literary/fictional content
+        literary_terms = {'novel', 'fiction', 'literary', 'literature', 'story', 'stories', 'author', 'writer', 'poem', 'poetry'}
+        if any(term in title.lower() for term in literary_terms) or any(term in text.lower()[:200] for term in literary_terms):
+            return False
+            
         # Extract key terms from the content
         doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
         content_entities = set([ent.text.lower() for ent in doc.ents])
@@ -351,13 +356,17 @@ def validate_wiki_content(text, title):
         term_matches = sum(term.lower() in text.lower() for term in key_terms)
         entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
         
-        # More lenient relevance criteria - just check if there's any meaningful overlap
-        is_relevant = term_matches > 0 or entity_overlap > 0
+        # Check for historical indicators
+        historical_terms = {'history', 'century', 'ancient', 'period', 'era', 'historical', 'invention', 'development', 'discovery'}
+        has_historical_context = any(term in text.lower() for term in historical_terms)
+        
+        # Require both term matches and historical context
+        is_relevant = (term_matches > 0 or entity_overlap > 0) and has_historical_context
         
         return is_relevant
         
     except Exception as e:
-        return True  # Accept content if validation fails
+        return False  # Reject content if validation fails
 
 def process_article(title, wiki_content, found_articles):
     """Process a Wikipedia article and add it to found_articles if relevant."""
@@ -530,12 +539,18 @@ REQUIREMENTS:
 
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
-        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important concepts with:
-- [1][text] for major historical developments, inventions, and key figures
-- [2][text] for specific dates, places, and technical terms
-- [3][text] for additional context and details (use sparingly)
+        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Focus on historical facts, dates, and concrete developments. Never include metaphorical interpretations or literary references.
 
-Keep your response natural and flowing. Do not overuse importance markers - only mark truly significant terms. Never use phrases like 'supporting detail:' in your response."""
+Your task is to:
+1. Use ONLY factual information from the provided Wikipedia content
+2. Focus on historical developments, inventions, and concrete events
+3. Avoid metaphors, symbolism, or literary interpretations
+4. Mark important concepts with:
+   - [1][text] for major historical developments, inventions, and key figures
+   - [2][text] for specific dates, places, and technical terms
+   - [3][text] for additional historical context and details (use sparingly)
+
+Keep your response natural and flowing, but always grounded in historical facts."""
 
         messages=[
             {
