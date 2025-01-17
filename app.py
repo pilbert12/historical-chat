@@ -329,7 +329,7 @@ CRITICAL FORMATTING REQUIREMENTS:
 
 3. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
 
-Keep your response natural and flowing, without section headers or numbering."""
+Keep your response natural and flowing, without section headers or numbering. Ensure your response is complete and not cut off."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
@@ -341,7 +341,9 @@ Keep your response natural and flowing, without section headers or numbering."""
 - [2][term] for dates, places, and technical terms
 - [3][term] for supporting concepts and contextual details
 
-Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566]."""
+Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566].
+
+Ensure your response is complete and not cut off."""
                 },
                 {
                     "role": "user",
@@ -350,7 +352,8 @@ Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnifi
             ],
             temperature=0.7,
             max_tokens=4096,
-            top_p=1
+            top_p=1,
+            stream=False  # Ensure we get complete responses
         )
         
         response_text = completion.choices[0].message.content.strip()
@@ -358,12 +361,20 @@ Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnifi
         # Split response and extract suggestions
         parts = response_text.split('\n')
         main_response = []
+        suggestions = []
+        
+        # Process each line
         for part in parts:
-            if not part.strip().startswith('[SUGGESTION]'):
+            if part.strip().startswith('[SUGGESTION]'):
+                suggestion = part.replace('[SUGGESTION]', '').strip()
+                suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
+                suggestion = re.sub(r'\s+', ' ', suggestion)
+                if suggestion:
+                    suggestions.append(suggestion)
+            else:
                 main_response.append(part)
         
         main_response = ' '.join(main_response).strip()
-        suggestions = process_suggestions(response_text)
         
         # Store suggestions in session state
         st.session_state.suggestions = suggestions[:3]
