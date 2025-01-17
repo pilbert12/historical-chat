@@ -509,18 +509,17 @@ def get_wikipedia_content(query):
         
         # Show more informative completion message
         if total_content_found > 0:
-            search_progress.markdown(f"""✅ Search complete! 
-- Processed {processed_count} articles
-- Found relevant content in {total_content_found} articles
-- Most relevant sources: {', '.join(relevant_snippets[:3])}...""")
+            search_progress.markdown(f"""ℹ️ Search complete
+- Found relevant content from {total_content_found} articles""")
         else:
             search_progress.markdown(f"""ℹ️ Search complete
-- Processed {processed_count} articles
-- No exact matches found, but gathered contextual information
-- Expanding search to related topics...""")
+- No exact matches found, gathering contextual information""")
         
-        time.sleep(3)  # Show completion message briefly
+        time.sleep(2)  # Show completion message briefly
         search_progress.empty()  # Clear the progress display
+
+        # Reset suggestions at the start of each new response
+        st.session_state.suggestions = []
         
         if wiki_content:
             # Store found articles in session state for reference
@@ -635,7 +634,16 @@ Keep your response natural and flowing, without section headers or numbering. Fo
             # Store suggestions in session state
             if 'suggestions' not in st.session_state:
                 st.session_state.suggestions = []
-            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
+            st.session_state.suggestions = [
+                s.strip() for s in parts[1:] 
+                if s.strip() and s.strip().startswith('[SUGGESTION]')
+            ][:3]
+            
+            # Clean up suggestion formatting
+            st.session_state.suggestions = [
+                s.replace('[SUGGESTION]', '').strip() 
+                for s in st.session_state.suggestions
+            ]
             
             return f'<div>{main_response}</div>'
         except Exception as e:
@@ -739,7 +747,16 @@ Keep your response natural and flowing, without section headers or numbering. Fo
         # Store suggestions in session state
         if 'suggestions' not in st.session_state:
             st.session_state.suggestions = []
-        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
+        st.session_state.suggestions = [
+            s.strip() for s in parts[1:] 
+            if s.strip() and s.strip().startswith('[SUGGESTION]')
+        ][:3]
+        
+        # Clean up suggestion formatting
+        st.session_state.suggestions = [
+            s.replace('[SUGGESTION]', '').strip() 
+            for s in st.session_state.suggestions
+        ]
         
         return f'<div>{main_response}</div>'
     except Exception as e:
