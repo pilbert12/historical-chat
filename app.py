@@ -385,23 +385,12 @@ Keep your response natural and flowing, without section headers or numbering. Fo
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
-        # Process importance markers in main response
-        for level in range(1, 4):
-            main_response = re.sub(
-                f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: create_wiki_link(m.group(1), 
-                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                main_response
-            )
-        
-        # Remove any remaining instances of the word "term"
-        main_response = re.sub(r'\bterm\b', '', main_response)
-        
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
-        return f'<div>{main_response}</div>'
+        # Let add_wiki_links handle the importance markers
+        return add_wiki_links(main_response)
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
