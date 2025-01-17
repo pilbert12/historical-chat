@@ -510,12 +510,10 @@ def get_deepseek_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            # Get last few exchanges, but limit to keep context manageable
-            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
+            recent_messages = st.session_state.messages[-6:]
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
-                # Clean up any HTML/markdown from previous responses
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
@@ -552,6 +550,9 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = parts[0].strip()
             suggestions = [s.strip() for s in parts[1:] if s.strip()]
             
+            # Store suggestions in session state
+            st.session_state.suggestions = suggestions
+            
             # Clean up formatting artifacts
             main_response = re.sub(r'PART \d:', '', main_response)
             main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
@@ -574,11 +575,6 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             # Clean up extra spaces and normalize whitespace
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
-            
-            # Store suggestions in session state
-            if 'suggestions' not in st.session_state:
-                st.session_state.suggestions = []
-            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
             
             return f'<div>{main_response}</div>'
         except Exception as e:
@@ -608,43 +604,27 @@ def get_groq_response(prompt, wiki_content):
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response about the following topic, with careful attention to marking important terms.
-
-Context from Wikipedia: {wiki_content}
+        full_prompt = f"""Context from Wikipedia: {wiki_content}
 {conversation_context}
 Current Question: {prompt}
 
-CRITICAL FORMATTING REQUIREMENTS:
-1. You MUST mark ALL important terms using these exact markers:
-   - Use [1][term] for major historical figures (e.g., [1][Julius Caesar]), key events (e.g., [1][Battle of Waterloo]), and primary concepts
-   - Use [2][term] for dates (e.g., [2][44 BC]), places (e.g., [2][Roman Empire]), and technical terms
-   - Use [3][term] for supporting concepts and contextual details
+Respond in two parts:
 
-2. Example of properly marked text:
-"[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics] during the campaign."
+PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
+- [1][term] for major historical figures, key events, primary concepts
+- [2][term] for dates, places, technical terms
+- [3][term] for related concepts and supporting details
 
-3. Follow these marking rules strictly:
-   - Mark EVERY important term - aim for at least 2-3 terms per sentence
-   - Use [1] for the most important 25% of terms
-   - Use [2] for the next 50% of terms
-   - Use [3] for the remaining 25% of terms
-   - Never mark the same term twice
-   - Always include the full term in the brackets
+PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
-
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a knowledgeable historical chatbot. Your primary task is to mark important terms with the correct importance level:
-- [1][term] for major figures and primary concepts (25% of terms)
-- [2][term] for dates, places, and technical terms (50% of terms)
-- [3][term] for supporting details (25% of terms)
-Mark EVERY important term, and ensure proper hierarchy through your marking."""
+                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
                 },
                 {
                     "role": "user",
@@ -662,6 +642,9 @@ Mark EVERY important term, and ensure proper hierarchy through your marking."""
         parts = response_text.split('[SUGGESTION]')
         main_response = parts[0].strip()
         suggestions = [s.strip() for s in parts[1:] if s.strip()]
+        
+        # Store suggestions in session state
+        st.session_state.suggestions = suggestions
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -685,11 +668,6 @@ Mark EVERY important term, and ensure proper hierarchy through your marking."""
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
-        
-        # Store suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
-        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
         
         return f'<div>{main_response}</div>'
     except Exception as e:
