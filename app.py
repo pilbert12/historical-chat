@@ -108,9 +108,13 @@ def add_wiki_links(text):
     text = re.sub(r'\s+', ' ', text)
     
     # Process importance markers
-    text = re.sub(r'\[1\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
-    text = re.sub(r'\[2\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
-    text = re.sub(r'\[3\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
+    text = re.sub(r'\[1\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
+    text = re.sub(r'\[2\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
+    text = re.sub(r'\[3\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
+    
+    # Clean up any remaining brackets and extra spaces
+    text = re.sub(r'\[\d+\]', '', text)
+    text = re.sub(r'\s+', ' ', text)
     
     return f'<div>{text}</div>'
 
