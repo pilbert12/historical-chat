@@ -176,196 +176,43 @@ def delete_conversation(conv_id):
     finally:
         db.close()
 
-# Add custom CSS for layout and styling
+# Add custom CSS
 st.markdown("""
 <style>
-    /* Header styling */
-    .stApp > header {
-        background-color: transparent;
-    }
-    
-    /* Title container */
-    h1:first-of-type {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        font-weight: 300;
-        letter-spacing: -0.5px;
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 2.8rem !important;
-        margin-bottom: 0.2rem;
-        line-height: 1.2;
-    }
-    
-    /* Subtitle styling */
-    .stApp > div:first-child > div:nth-child(2) p {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        margin-bottom: 3rem;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 1.1rem;
-        font-weight: 300;
-        letter-spacing: 0.2px;
-    }
-
-    /* Chat message icons */
-    .stChatMessage [data-testid="stChatMessageAvatar"] {
-        background: transparent !important;
-        padding: 0.5rem;
-    }
-
-    /* User icon */
-    .stChatMessage.user [data-testid="stChatMessageAvatar"] {
-        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%) !important;
-        border-radius: 12px;
-    }
-
-    /* Assistant icon */
-    .stChatMessage.assistant [data-testid="stChatMessageAvatar"] {
-        background: linear-gradient(135deg, #FFB86C 0%, #FFD93D 100%) !important;
-        border-radius: 12px;
-    }
-
-    /* Chat message container */
-    .stChatMessage {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1rem;
-        margin: 1rem 0;
-        transition: all 0.2s ease-in-out;
-    }
-
-    .stChatMessage:hover {
-        background: rgba(255, 255, 255, 0.07);
-        border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    /* Main content width */
-    .stApp > div:first-child {
-        max-width: 1200px !important;
-        padding-left: 5rem;
-        padding-right: 5rem;
-    }
-    
-    /* Base text style */
-    .stChatMessage div.stMarkdown {
-        color: rgba(250, 250, 250, 0.6) !important;
-        line-height: 1.6;
-        max-width: 100% !important;
-    }
-    
-    /* Make chat messages wider */
-    .stChatMessage {
-        max-width: 100% !important;
-    }
-    
-    .stChatMessage > div {
-        max-width: 100% !important;
-    }
-
-    /* Link styling */
-    .stChatMessage div.stMarkdown a {
-        color: inherit;
-        text-decoration: none;
-        border-radius: 3px;
-        padding: 0.1em 0.2em;
-        margin: 0 -0.2em;
-        transition: all 0.2s ease-in-out;
-    }
-
-    /* Importance-based text styling */
-    .stChatMessage div.stMarkdown a.text-white {
-        color: rgba(255, 255, 255, 0.95) !important;
-        font-weight: 500;
-    }
-    
-    .stChatMessage div.stMarkdown a.text-gray-200 {
-        color: rgba(255, 255, 255, 0.85) !important;
-    }
-    
-    .stChatMessage div.stMarkdown a.text-gray-400 {
-        color: rgba(255, 255, 255, 0.75) !important;
-    }
-
-    /* Hover effect for links */
-    .stChatMessage div.stMarkdown a:hover {
-        background: rgba(255, 255, 255, 0.1);
-        text-decoration: none;
-    }
-    
-    /* Style the buttons container */
-    div[data-testid="column"] > div {
-        display: flex;
-        justify-content: center;
-        margin-top: 1.5rem;
-    }
-    
-    /* Style the buttons */
-    div[data-testid="column"] button {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.75);
-        transition: all 0.2s ease-in-out;
-        min-height: unset;
-        padding: 0.5rem 1rem;
-        width: auto !important;
-        flex: 1;
-        border-radius: 8px;
-    }
-    
-    div[data-testid="column"] button:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.9);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    /* Play button styling */
-    .play-button-container {
-        position: absolute;
-        top: 1rem;
-        right: 1.5rem;
-        z-index: 100;
-    }
-    
-    .play-button {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
-        padding: 0;
-    }
-    
-    .play-button:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.3);
-    }
-    
-    .play-button svg {
-        width: 16px;
-        height: 16px;
-        fill: rgba(255, 255, 255, 0.8);
-    }
-    
-    /* Make chat messages have relative positioning for play button */
-    .stChatMessage {
-        position: relative !important;
-    }
-</style>
-
-<script>
-function askFollowUp(question) {
-    const input = document.querySelector('[data-testid="stChatInput"] input');
-    const button = document.querySelector('[data-testid="stChatInput"] button');
-    if (input && button) {
-        input.value = question;
-        button.click();
-    }
+/* Chat message styling */
+.chat-message {
+    font-size: 1rem;
+    line-height: 1.5;
 }
-</script>
+
+/* Link styling */
+.chat-message a {
+    text-decoration: none;
+    padding: 0.1em 0.2em;
+    margin: 0 -0.2em;
+    border-radius: 3px;
+    transition: all 0.2s ease-in-out;
+}
+
+/* Importance-based colors */
+.chat-message a.text-white {
+    color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.chat-message a.text-gray-300 {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.chat-message a.text-gray-400 {
+    color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* Hover effect */
+.chat-message a:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
 # Load environment variables
@@ -388,205 +235,72 @@ def load_spacy_model():
 
 nlp = load_spacy_model()
 
-def create_wiki_link(text, importance='supporting'):
+def create_wiki_link(text, importance='secondary'):
     """Create a Wikipedia link for the given text with importance-based styling."""
-    # Clean up text
-    clean_text = text.strip()
+    # Clean up text and remove any existing markers
+    clean_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', text.strip())
+    clean_text = re.sub(r'\s+', ' ', clean_text)
     
     # Skip if text is too short or just numbers
     if len(clean_text) < 3 or clean_text.isdigit():
-        return text
+        return clean_text
     
-    # Create a search URL
+    # Create search URL
     search_url = f"https://en.wikipedia.org/w/index.php?search={clean_text.replace(' ', '+')}"
     
-    # Map importance levels to CSS classes
-    importance_map = {
-        'primary': 'text-white font-medium',  # Brightest, bold
-        'secondary': 'text-gray-200',         # Medium brightness
-        'tertiary': 'text-gray-400'           # Dimmer
+    # Map importance to CSS classes
+    importance_classes = {
+        'primary': 'text-white hover:bg-gray-700',
+        'secondary': 'text-gray-300 hover:bg-gray-700',
+        'tertiary': 'text-gray-400 hover:bg-gray-700'
     }
     
-    css_class = importance_map.get(importance, 'text-gray-400')
+    css_class = importance_classes.get(importance, 'text-gray-400 hover:bg-gray-700')
     
-    return f'<a href="{search_url}" class="{css_class}" data-importance="{importance}">{text}</a>'
+    return f'<a href="{search_url}" class="{css_class}">{clean_text}</a>'
 
-def add_wiki_links(text):
-    """Process text and add Wikipedia links with importance-based styling."""
-    # Clean up any existing URLs or markdown links
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-    text = re.sub(r'\s+', ' ', text)
+def process_response(response_text):
+    """Process the response text to properly format links and clean up markers."""
+    # Clean up formatting artifacts
+    response = re.sub(r'PART \d:', '', response_text)
+    response = re.sub(r'\*\*.*?\*\*', '', response)
+    response = re.sub(r'\d\. ', '', response)
+    response = re.sub(r'Follow-Up Questions:', '', response)
+    response = re.sub(r'\s*-\s*$', '', response, flags=re.MULTILINE)
+    response = re.sub(r'\s+-\s+', ' ', response)
+    response = re.sub(r'\bterm\b', '', response, flags=re.IGNORECASE)
     
-    # Split text into sentences
-    sentences = text.split('. ')
-    result = []
+    # Remove classification labels
+    response = re.sub(r'\b(major historical figure|key event|date and place|related concept|supporting detail)\b', '', response, flags=re.IGNORECASE)
     
-    for sentence in sentences:
-        if not sentence.strip():
-            continue
-        
-        words = sentence.split()
-        i = 0
-        phrase_result = []
-        
-        while i < len(words):
-            # Try 3-word phrases (highest importance)
-            if i + 2 < len(words):
-                phrase = ' '.join(words[i:i+3])
-                if (len(phrase) > 5 and 
-                    not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but']) and
-                    any(word[0].isupper() for word in words[i:i+3])):
-                    phrase_result.append(create_wiki_link(phrase, 'important'))
-                    i += 3
-                    continue
-            
-            # Try 2-word phrases (secondary importance)
-            if i + 1 < len(words):
-                phrase = ' '.join(words[i:i+2])
-                if (len(phrase) > 5 and 
-                    not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but']) and
-                    any(word[0].isupper() for word in words[i:i+2])):
-                    phrase_result.append(create_wiki_link(phrase, 'secondary'))
-                    i += 2
-                    continue
-            
-            # Single words
-            if words[i][0].isupper() and len(words[i]) > 2:
-                phrase_result.append(create_wiki_link(words[i], 'important' if i == 0 else 'secondary'))
-            else:
-                phrase_result.append(words[i])
-            i += 1
-        
-        result.append(' '.join(phrase_result))
+    # Process importance markers
+    processed_terms = set()
     
-    final_text = '. '.join(result).strip()
-    return f'<div>{final_text}</div>'
-
-def get_wikipedia_content(query):
-    """Search Wikipedia and get content for the query."""
-    try:
-        # Search for the query
-        search_results = wikipedia.search(query, results=3)
+    def replace_term(match):
+        level = match.group(1)
+        term = match.group(2).strip()
         
-        if not search_results:
-            return None
-            
-        wiki_content = []
+        if term.lower() in processed_terms:
+            return term
         
-        # Get content for each result
-        for title in search_results:
-            try:
-                page = wiki.page(title)
-                if page.exists():
-                    wiki_content.append(page.summary[0:500])
-            except Exception as e:
-                continue
+        processed_terms.add(term.lower())
+        importance = {
+            '1': 'primary',
+            '2': 'secondary',
+            '3': 'tertiary'
+        }.get(level, 'secondary')
         
-        if wiki_content:
-            return "\n\n".join(wiki_content)
-        return None
-    except Exception as e:
-        st.error(f"Error searching Wikipedia: {str(e)}")
-        return None
-
-def get_deepseek_response(prompt, wiki_content):
-    """Get response from Deepseek API with follow-up suggestions."""
-    try:
-        # First try to get API key from session state
-        api_key = st.session_state.get('DEEPSEEK_API_KEY')
-        if not api_key:
-            # If not in session state, try to get from secrets
-            try:
-                api_key = st.secrets["DEEPSEEK_API_KEY"]
-            except:
-                return "Please enter your Deepseek API key in the sidebar to continue."
-        
-        headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Build conversation history context
-        conversation_context = ""
-        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            # Get last few exchanges, but limit to keep context manageable
-            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
-            conversation_context = "\nPrevious conversation:\n"
-            for msg in recent_messages:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                # Clean up any HTML/markdown from previous responses
-                content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-                conversation_context += f"{role}: {content}\n"
-        
-        # Combine wiki content with user's question and conversation context
-        full_prompt = f"""Context from Wikipedia: {wiki_content}
-{conversation_context}
-Current Question: {prompt}
-
-Respond in two parts:
-
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts (just wrap the actual term, do not include descriptions like 'major historical figure')
-- [2][term] for dates, places, technical terms (just wrap the actual term, do not include descriptions like 'date and place')
-- [3][term] for related concepts and supporting details (just wrap the actual term, do not include descriptions like 'related concept')
-
-Example: "[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics]."
-
-PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
-
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' or any classification labels in your response."""
-
-        try:
-            response = requests.post(
-                'https://api.deepseek.com/v1/chat/completions',
-                headers=headers,
-                json={
-                    'model': 'deepseek-chat',
-                    'messages': [{'role': 'user', 'content': full_prompt}]
-                }
-            )
-            response_text = response.json()['choices'][0]['message']['content']
-            
-            # Split response and suggestions
-            parts = response_text.split('[SUGGESTION]')
-            main_response = parts[0].strip()
-            suggestions = [s.strip() for s in parts[1:] if s.strip()]
-            
-            # Clean up formatting artifacts
-            main_response = re.sub(r'PART \d:', '', main_response)
-            main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-            main_response = re.sub(r'\d\. ', '', main_response)
-            main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-            
-            # Process the main response
-            main_response = re.sub(r'https?://\S+', '', main_response)
-            main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-            
-            # Process importance markers in main response
-            for level in range(1, 4):
-                main_response = re.sub(
-                    f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: create_wiki_link(m.group(1), 
-                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                    main_response
-                )
-            
-            # Clean up extra spaces and normalize whitespace
-            main_response = re.sub(r'\s+', ' ', main_response)
-            main_response = main_response.strip()
-            
-            # Store suggestions in session state
-            if 'suggestions' not in st.session_state:
-                st.session_state.suggestions = []
-            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
-            
-            return f'<div>{main_response}</div>'
-        except Exception as e:
-            return f"Error communicating with Deepseek API: {str(e)}"
-    except Exception as e:
-        return f"Error communicating with Deepseek API: {str(e)}"
+        return create_wiki_link(term, importance)
+    
+    # Replace importance markers with links
+    response = re.sub(r'\[(\d)\]\[([^\]]+?)\]', replace_term, response)
+    
+    # Clean up whitespace and punctuation
+    response = re.sub(r'\s+', ' ', response)
+    response = re.sub(r'\s*([.,!?])', r'\1', response)
+    response = response.strip()
+    
+    return f'<div class="chat-message">{response}</div>'
 
 def get_groq_response(prompt, wiki_content):
     """Get response from Groq API with follow-up suggestions."""
@@ -656,47 +370,14 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = parts[0].strip()
         suggestions = [s.strip() for s in parts[1:] if s.strip()]
         
-        # Clean up formatting artifacts
-        main_response = re.sub(r'PART \d:', '', main_response)
-        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-        main_response = re.sub(r'\d\. ', '', main_response)
-        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-        main_response = re.sub(r'\s*-\s*$', '', main_response, flags=re.MULTILINE)  # Remove trailing dashes
-        main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove standalone dashes
-        main_response = re.sub(r'\bterm\b', '', main_response, flags=re.IGNORECASE)  # Remove the word 'term'
-        
-        # Remove classification labels
-        main_response = re.sub(r'\b(major historical figure|key event|date and place|related concept|supporting detail)\b', '', main_response, flags=re.IGNORECASE)
-        
         # Process the main response
-        main_response = re.sub(r'https?://\S+', '', main_response)
-        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        processed_response = process_response(main_response)
         
-        # Track processed terms to avoid duplicates
-        processed_terms = set()
-        
-        def process_term(match):
-            term = match.group(1).strip()
-            if term.lower() in processed_terms:
-                return term  # Return term without markup if already processed
-            processed_terms.add(term.lower())
-            importance = 'primary' if match.group(0).startswith('[1]') else 'secondary' if match.group(0).startswith('[2]') else 'tertiary'
-            return create_wiki_link(term, importance)
-        
-        # Process importance markers in main response
-        main_response = re.sub(r'\[(\d)\]\[([^\]]+?)\](?:\s+\[\d\]\[\2\])?', lambda m: process_term(m), main_response)
-        
-        # Clean up extra spaces and normalize whitespace
-        main_response = re.sub(r'\s+', ' ', main_response)
-        main_response = re.sub(r'\s*([.,!?])', r'\1', main_response)  # Fix spacing around punctuation
-        main_response = main_response.strip()
-        
-        # Store suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
+        # Store suggestions
         st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
         
-        return f'<div>{main_response}</div>'
+        return processed_response
+        
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
