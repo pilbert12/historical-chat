@@ -99,7 +99,7 @@ def create_wiki_link(text, importance):
     """Create a Wikipedia link with proper styling based on importance."""
     clean_text = text.strip()
     search_url = f"https://en.wikipedia.org/wiki/{clean_text.replace(' ', '_')}"
-    return f'<a href="{search_url}" data-importance="{importance}" target="_blank">{clean_text}</a>'
+    return f'<a href="{search_url}" data-importance="{importance}" target="_blank" style="color: inherit !important; text-decoration: none !important;">{clean_text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -514,17 +514,18 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Clean the response of any existing markers
-        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', response)
+        # Clean the response of any existing HTML and markers
+        clean_response = re.sub(r'<[^>]+>', '', response)
+        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
         
         # Apply our own formatting
         formatted_response = post_process_response(clean_response)
         
-        # Convert to HTML with links
+        # Convert to HTML with links - this is where the magic happens
         html_response = add_wiki_links(formatted_response)
         
         # Validate content
-        is_valid, correction_prompt = validate_content(prompt, html_response)
+        is_valid, correction_prompt = validate_content(prompt, clean_response)  # Validate clean text
         
         # If content is not valid, get a new response
         if not is_valid and correction_prompt:
@@ -534,7 +535,8 @@ def get_ai_response(prompt, wiki_content):
                 response = get_groq_response(correction_prompt, wiki_content)
             
             # Process the new response
-            clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', response)
+            clean_response = re.sub(r'<[^>]+>', '', response)
+            clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
             formatted_response = post_process_response(clean_response)
             html_response = add_wiki_links(formatted_response)
         
