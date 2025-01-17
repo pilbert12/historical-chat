@@ -3,7 +3,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 import bcrypt
 from datetime import datetime
-import os
 
 Base = declarative_base()
 
@@ -37,31 +36,12 @@ class Conversation(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     user = relationship("User", back_populates="conversations")
 
-def init_db():
-    """Initialize the database and create tables."""
-    # Create database directory if it doesn't exist
-    db_dir = os.path.dirname(os.path.abspath(__file__))
-    if not os.path.exists(db_dir):
-        os.makedirs(db_dir)
-    
-    # Create database engine with absolute path
-    db_path = os.path.join(db_dir, 'historical_chat.db')
-    engine = create_engine(f'sqlite:///{db_path}')
-    
-    # Create all tables
-    Base.metadata.create_all(engine)
-    
-    return engine
+# Create database engine and tables
+engine = create_engine('sqlite:///historical_chat.db')
+Base.metadata.create_all(engine)
 
-# Initialize database and create session factory
-engine = init_db()
+# Create session factory
 Session = sessionmaker(bind=engine)
 
 def get_db_session():
-    """Get a new database session."""
-    try:
-        session = Session()
-        return session
-    except Exception as e:
-        print(f"Error creating database session: {str(e)}")
-        raise 
+    return Session() 
