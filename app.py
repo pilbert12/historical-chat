@@ -11,6 +11,8 @@ import base64
 import io
 from groq import Groq
 import time
+import urllib.parse
+import random
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -277,33 +279,14 @@ def load_spacy_model():
 
 nlp = load_spacy_model()
 
-def create_wiki_link(text, importance='supporting'):
-    """Create a Wikipedia link for the given text with importance-based styling."""
-    # Clean up text
+def create_wiki_link(text, importance):
+    """Create a Wikipedia search link with proper formatting."""
+    # Clean up the text and create a proper search URL
     clean_text = text.strip()
+    search_url = f"https://en.wikipedia.org/wiki/Special:Search/{urllib.parse.quote(clean_text)}"
     
-    # Common words to skip
-    common_words = {
-        'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with', 'he', 'as',
-        'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will',
-        'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which',
-        'go', 'me', 'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year',
-        'your', 'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its',
-        'over', 'think', 'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even',
-        'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us', 'was', 'were', 'had', 'has', 'been',
-        'said', 'did', 'many', 'more', 'those', 'is', 'am', 'are', 'very', 'much'
-    }
-    
-    # Skip if text is too short, just numbers, or common words
-    if (len(clean_text) < 3 or 
-        clean_text.isdigit() or 
-        clean_text.lower() in common_words or 
-        len(clean_text.split()) == 1 and clean_text.lower() in common_words):
-        return text
-    
-    # Create a search URL
-    search_url = f"https://en.wikipedia.org/w/index.php?search={clean_text.replace(' ', '+')}"
-    return f'<a href="{search_url}" data-importance="{importance}">{text}</a>'
+    # Return properly formatted HTML with data-importance attribute
+    return f'<a href="{search_url}" class="wiki-link" data-importance="{importance}">{clean_text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -501,12 +484,24 @@ def get_wikipedia_content(query):
                         total_content_found += 1
                         relevant_snippets.append(title)
                     
-                if len(found_articles) >= 20:
+                if total_content_found >= 3:  # Changed from found_articles to total_content_found
                     break
                     
             except Exception as e:
                 continue
-        
+                
+        # If we haven't found enough content, keep searching with broader terms
+        if total_content_found < 3:
+            search_progress.markdown("🔍 Expanding search to find more relevant content...")
+            for title in wikipedia.search(query, results=20):  # Broader search
+                if total_content_found >= 3:
+                    break
+                content_before = len(wiki_content)
+                process_article(title)
+                if len(wiki_content) > content_before:
+                    total_content_found += 1
+                    relevant_snippets.append(title)
+
         # Show more informative completion message
         if total_content_found > 0:
             search_progress.markdown(f"""ℹ️ Search complete
@@ -610,9 +605,26 @@ Do not use the word 'term' in your response. Simply mark the important text dire
             response_text = response.json()['choices'][0]['message']['content']
             
             # Split response and suggestions
-            parts = response_text.split('[SUGGESTION]')
-            main_response = parts[0].strip()
-            suggestions = [s.strip() for s in parts[1:] if s.strip()]
+            parts = response_text.split('\n')
+            main_response = []
+            suggestions = []
+            
+            for part in parts:
+                if part.strip().startswith('[SUGGESTION]'):
+                    suggestions.append(part.replace('[SUGGESTION]', '').strip())
+                else:
+                    main_response.append(part)
+            
+            main_response = ' '.join(main_response).strip()
+            
+            # Store exactly 3 suggestions in session state
+            if 'suggestions' not in st.session_state:
+                st.session_state.suggestions = []
+            st.session_state.suggestions = suggestions[:3]
+            
+            # If we don't have enough suggestions, generate some based on the content
+            while len(st.session_state.suggestions) < 3:
+                st.session_state.suggestions.append(f"Tell me more about {random.choice(relevant_snippets)}")
             
             # Clean up formatting artifacts
             main_response = re.sub(r'PART \d:', '', main_response)
@@ -639,20 +651,6 @@ Do not use the word 'term' in your response. Simply mark the important text dire
             # Clean up extra spaces and normalize whitespace
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
-            
-            # Store suggestions in session state
-            if 'suggestions' not in st.session_state:
-                st.session_state.suggestions = []
-            st.session_state.suggestions = [
-                s.strip() for s in parts[1:] 
-                if s.strip() and s.strip().startswith('[SUGGESTION]')
-            ][:3]
-            
-            # Clean up suggestion formatting
-            st.session_state.suggestions = [
-                s.replace('[SUGGESTION]', '').strip() 
-                for s in st.session_state.suggestions
-            ]
             
             return f'<div>{main_response}</div>'
         except Exception as e:
@@ -726,9 +724,26 @@ Keep your response natural and flowing, without section headers or numbering. Fo
         response_text = completion.choices[0].message.content.strip()
         
         # Split response and suggestions
-        parts = response_text.split('[SUGGESTION]')
-        main_response = parts[0].strip()
-        suggestions = [s.strip() for s in parts[1:] if s.strip()]
+        parts = response_text.split('\n')
+        main_response = []
+        suggestions = []
+        
+        for part in parts:
+            if part.strip().startswith('[SUGGESTION]'):
+                suggestions.append(part.replace('[SUGGESTION]', '').strip())
+            else:
+                main_response.append(part)
+        
+        main_response = ' '.join(main_response).strip()
+        
+        # Store exactly 3 suggestions in session state
+        if 'suggestions' not in st.session_state:
+            st.session_state.suggestions = []
+        st.session_state.suggestions = suggestions[:3]
+        
+        # If we don't have enough suggestions, generate some based on the content
+        while len(st.session_state.suggestions) < 3:
+            st.session_state.suggestions.append(f"Tell me more about {random.choice(relevant_snippets)}")
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -755,20 +770,6 @@ Keep your response natural and flowing, without section headers or numbering. Fo
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
-        
-        # Store suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
-        st.session_state.suggestions = [
-            s.strip() for s in parts[1:] 
-            if s.strip() and s.strip().startswith('[SUGGESTION]')
-        ][:3]
-        
-        # Clean up suggestion formatting
-        st.session_state.suggestions = [
-            s.replace('[SUGGESTION]', '').strip() 
-            for s in st.session_state.suggestions
-        ]
         
         return f'<div>{main_response}</div>'
     except Exception as e:
