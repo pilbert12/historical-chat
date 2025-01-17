@@ -228,14 +228,8 @@ def logout_user():
 # Add custom CSS for layout and styling
 st.markdown("""
 <style>
-    /* Force dark theme colors */
-    .stApp {
-        background-color: rgb(17, 19, 23) !important;
-    }
-    
     /* Base text style */
     .stChatMessage div.stMarkdown {
-        color: rgba(250, 250, 250, 0.65) !important;
         line-height: 1.8;
         font-size: 1.05rem;
         letter-spacing: 0.2px;
@@ -243,38 +237,27 @@ st.markdown("""
     
     /* Importance-based text styling */
     .primary-term {
-        color: rgba(255, 255, 255, 0.95) !important;
+        opacity: 0.95;
         font-weight: 600;
         letter-spacing: 0.3px;
     }
     
     .secondary-term {
-        color: rgba(255, 255, 255, 0.75) !important;
+        opacity: 0.75;
         font-weight: 400;
     }
     
     .tertiary-term {
-        color: rgba(255, 255, 255, 0.5) !important;
+        opacity: 0.5;
         font-weight: 300;
     }
     
     /* Chat message container */
     .stChatMessage {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
         border-radius: 16px;
         padding: 1.75rem;
         margin: 1rem 0;
         transition: all 0.2s ease-in-out;
-    }
-    
-    /* Force dark text in chat messages */
-    .stChatMessage [data-testid="chatAvatarIcon-user"] {
-        color: white !important;
-    }
-    
-    .stChatMessage [data-testid="chatAvatarIcon-assistant"] {
-        color: white !important;
     }
     
     /* Follow-up questions section */
@@ -284,15 +267,10 @@ st.markdown("""
     
     .stChatMessage hr {
         margin: 2rem 0 1.5rem;
-        border-color: rgba(255, 255, 255, 0.1);
     }
     
     /* Buttons styling */
     div[data-testid="column"] button {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        color: rgba(255, 255, 255, 0.8) !important;
-        transition: all 0.2s ease-in-out;
         min-height: unset;
         padding: 0.75rem 1.25rem;
         width: auto !important;
@@ -301,26 +279,6 @@ st.markdown("""
         font-size: 0.95rem;
         line-height: 1.4;
         text-align: center;
-    }
-    
-    /* Force dark sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: rgb(17, 19, 23) !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Force dark inputs */
-    .stTextInput input {
-        background-color: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        color: white !important;
-    }
-    
-    /* Force dark selectbox */
-    .stSelectbox select {
-        background-color: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
