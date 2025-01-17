@@ -680,7 +680,7 @@ REQUIREMENTS:
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
         completion = client.chat.completions.create(
-            model="mixtral-8x7b-32768",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
@@ -695,7 +695,7 @@ Keep your response natural and flowing, without section headers or numbering. Fo
                 }
             ],
             temperature=0.7,
-            max_tokens=4096,
+            max_tokens=2048,
             top_p=1
         )
         
