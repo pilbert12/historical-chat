@@ -430,14 +430,17 @@ def get_wikipedia_content(query):
                 relevance_score = 0
                 
                 # Calculate relevance based on key term matches in title and summary
-                title_matches = sum(term.lower() in title.lower() for term in key_terms)
+                title_matches = sum(term.lower() in title.lower() for term in key_terms) * 4  # Increased title weight
                 summary_matches = sum(term.lower() in summary.lower() for term in key_terms)
                 
-                # Title matches are worth more
-                relevance_score = (title_matches * 3) + summary_matches
+                # Additional relevance for exact phrase matches
+                exact_phrase_matches = sum(query.lower() in title.lower() or query.lower() in summary.lower())
                 
-                # Only process if article has some relevance
-                if relevance_score > 0:
+                # Calculate final relevance score
+                relevance_score = title_matches + summary_matches + (exact_phrase_matches * 5)
+                
+                # Only process if article has good relevance
+                if relevance_score >= 2:  # Increased threshold
                     # Track what content we're using from this article
                     found_articles[title] = {
                         'summary': summary[:1000],
@@ -446,8 +449,8 @@ def get_wikipedia_content(query):
                         'depth': depth
                     }
                     
-                    # Add summary if unique
-                    if summary not in seen_content:
+                    # Add summary if unique and highly relevant
+                    if summary not in seen_content and relevance_score >= 3:
                         seen_content.add(summary)
                         wiki_content.append((f"From article '{title}':\n{summary[:1000]}", relevance_score))
                         total_content_found += 1
@@ -510,7 +513,8 @@ def get_wikipedia_content(query):
                         total_content_found += 1
                         relevant_snippets.append(title)
                     
-                if total_content_found >= 3:  # Changed from found_articles to total_content_found
+                if total_content_found >= 3 and max(score for _, score in wiki_content) >= 5:
+                    # Only stop if we have enough content AND at least one highly relevant article
                     break
                     
             except Exception as e:
@@ -601,11 +605,11 @@ REQUIREMENTS:
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
         system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important concepts with:
-- [1][text] for major figures and primary concepts
-- [2][text] for dates, places, and technical details
-- [3][text] for supporting information
+- [1][text] for major historical developments, inventions, and key figures
+- [2][text] for specific dates, places, and technical terms
+- [3][text] for additional context and details (use sparingly)
 
-Do not use the word 'term' in your response. Simply mark the important text directly."""
+Keep your response natural and flowing. Do not overuse importance markers - only mark truly significant terms. Never use phrases like 'supporting detail:' in your response."""
 
         messages=[
             {
