@@ -580,25 +580,31 @@ REQUIREMENTS:
 
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
+        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important concepts with:
+- [1][text] for major figures and primary concepts
+- [2][text] for dates, places, and technical details
+- [3][text] for supporting information
+
+Do not use the word 'term' in your response. Simply mark the important text directly."""
+
+        messages=[
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": full_prompt
+            }
+        ]
+
         try:
             response = requests.post(
                 'https://api.deepseek.com/v1/chat/completions',
                 headers=headers,
                 json={
                     'model': 'deepseek-chat',
-                    'messages': [
-                        {
-                            'role': 'system',
-                            'content': """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
-- [1][term] for major figures and primary concepts
-- [2][term] for dates, places, and technical terms
-- [3][term] for supporting details"""
-                        },
-                        {
-                            'role': 'user',
-                            'content': full_prompt
-                        }
-                    ]
+                    'messages': messages
                 }
             )
             response_text = response.json()['choices'][0]['message']['content']
@@ -623,9 +629,12 @@ Keep your response natural and flowing, without section headers or numbering. Fo
                 main_response = re.sub(
                     f'\\[{level}\\]\\[([^\\]]+)\\]',
                     lambda m: create_wiki_link(m.group(1), 
-                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                        'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
                     main_response
                 )
+            
+            # Remove any remaining instances of the word "term"
+            main_response = re.sub(r'\bterm\b', '', main_response)
             
             # Clean up extra spaces and normalize whitespace
             main_response = re.sub(r'\s+', ' ', main_response)
@@ -736,9 +745,12 @@ Keep your response natural and flowing, without section headers or numbering. Fo
             main_response = re.sub(
                 f'\\[{level}\\]\\[([^\\]]+)\\]',
                 lambda m: create_wiki_link(m.group(1), 
-                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
                 main_response
             )
+        
+        # Remove any remaining instances of the word "term"
+        main_response = re.sub(r'\bterm\b', '', main_response)
         
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
