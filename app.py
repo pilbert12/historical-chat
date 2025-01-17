@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from gtts import gTTS
 import base64
 import io
-from groq import Groq
+from groq.client import Groq
 
 # Add custom CSS for layout and styling
 st.markdown("""
