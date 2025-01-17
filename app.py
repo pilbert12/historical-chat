@@ -508,37 +508,14 @@ def get_ai_response(prompt, wiki_content):
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
-        # Get initial response
+        # Get response
         if model_choice == "Deepseek (Requires API Key)":
             response = get_deepseek_response(prompt, wiki_content)
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Clean the response of any existing HTML and markers
-        clean_response = re.sub(r'<[^>]+>', '', response)
-        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
-        
-        # Apply our own formatting
-        formatted_response = post_process_response(clean_response)
-        
-        # Convert to HTML with links - this is where the magic happens
-        html_response = add_wiki_links(formatted_response)
-        
-        # Validate content
-        is_valid, correction_prompt = validate_content(prompt, clean_response)  # Validate clean text
-        
-        # If content is not valid, get a new response
-        if not is_valid and correction_prompt:
-            if model_choice == "Deepseek (Requires API Key)":
-                response = get_deepseek_response(correction_prompt, wiki_content)
-            else:
-                response = get_groq_response(correction_prompt, wiki_content)
-            
-            # Process the new response
-            clean_response = re.sub(r'<[^>]+>', '', response)
-            clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
-            formatted_response = post_process_response(clean_response)
-            html_response = add_wiki_links(formatted_response)
+        # Convert markers to HTML links
+        html_response = add_wiki_links(response)
         
         # Add sources section
         if 'last_wiki_articles' in st.session_state:
