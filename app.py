@@ -102,11 +102,13 @@ def save_conversation():
 
 def logout_user():
     """Logout user and clear session state."""
-    save_conversation()  # Save conversation before logging out
+    if st.session_state.messages:  # Only save if there are messages
+        save_conversation()  # Save conversation before logging out
     st.session_state.user_id = None
     st.session_state.username = None
     st.session_state.messages = []
     st.session_state.suggestions = []
+    st.session_state.current_conversation_id = None
     if 'DEEPSEEK_API_KEY' in st.session_state:
         del st.session_state['DEEPSEEK_API_KEY']
     if 'GROQ_API_KEY' in st.session_state:
@@ -792,7 +794,7 @@ def get_user_conversations():
         conversations = db.query(Conversation).filter(
             Conversation.user_id == st.session_state.user_id
         ).order_by(Conversation.updated_at.desc()).all()
-        return conversations
+        return conversations or []  # Return empty list if no conversations
     finally:
         db.close()
 
@@ -802,14 +804,15 @@ def load_conversation(conv_id):
     try:
         conv = db.query(Conversation).get(conv_id)
         if conv and conv.user_id == st.session_state.user_id:
-            st.session_state.messages = conv.messages
+            st.session_state.messages = conv.messages or []  # Initialize empty if None
             st.session_state.current_conversation_id = conv_id
     finally:
         db.close()
 
 def create_new_conversation():
     """Create a new conversation."""
-    save_conversation()  # Save current conversation if exists
+    if st.session_state.messages:  # Only save if there are messages
+        save_conversation()  # Save current conversation if exists
     st.session_state.messages = []
     st.session_state.suggestions = []
     st.session_state.current_conversation_id = None
