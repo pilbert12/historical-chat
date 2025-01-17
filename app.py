@@ -431,8 +431,8 @@ def get_groq_response(prompt, wiki_content):
         if not api_key:
             return "Please enter your Groq API key in the sidebar to continue. You can get a free key from groq.com"
         
-        # Initialize Groq client with minimal configuration
-        client = Groq(api_key=api_key)
+        # Initialize Groq client
+        client = Groq(api_key)
         
         # Build conversation history context
         conversation_context = ""
