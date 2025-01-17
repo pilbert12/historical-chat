@@ -107,12 +107,19 @@ def add_wiki_links(text):
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Process importance markers
-    text = re.sub(r'\[1\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
-    text = re.sub(r'\[2\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
-    text = re.sub(r'\[3\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
+    # Process each importance level separately and handle nested markers
+    def replace_markers(match, importance):
+        inner_text = match.group(1)
+        # Remove any nested markers before creating the link
+        inner_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', inner_text)
+        return create_wiki_link(inner_text, importance)
     
-    # Clean up any remaining brackets and extra spaces
+    # Process from most specific to least specific
+    text = re.sub(r'\[1\]\[([^\]]*?(?:\[[^\]]*\][^\]]*?)*)\]', lambda m: replace_markers(m, 'important'), text)
+    text = re.sub(r'\[2\]\[([^\]]*?(?:\[[^\]]*\][^\]]*?)*)\]', lambda m: replace_markers(m, 'secondary'), text)
+    text = re.sub(r'\[3\]\[([^\]]*?(?:\[[^\]]*\][^\]]*?)*)\]', lambda m: replace_markers(m, 'tertiary'), text)
+    
+    # Clean up any remaining markers
     text = re.sub(r'\[\d+\]', '', text)
     text = re.sub(r'\s+', ' ', text)
     
