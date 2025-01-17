@@ -10,6 +10,103 @@ from gtts import gTTS
 import base64
 import io
 from groq import Groq
+from models import User, Conversation, get_db_session
+from datetime import datetime
+
+# Initialize session state for authentication
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+if 'username' not in st.session_state:
+    st.session_state.username = None
+
+def login_user(username, password):
+    """Login user and return success status."""
+    db = get_db_session()
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        if user and user.check_password(password):
+            user.last_login = datetime.utcnow()
+            db.commit()
+            st.session_state.user_id = user.id
+            st.session_state.username = user.username
+            # Load user's API keys
+            if user.deepseek_api_key:
+                st.session_state['DEEPSEEK_API_KEY'] = user.deepseek_api_key
+            if user.groq_api_key:
+                st.session_state['GROQ_API_KEY'] = user.groq_api_key
+            # Load last conversation
+            last_conv = db.query(Conversation).filter(
+                Conversation.user_id == user.id
+            ).order_by(Conversation.updated_at.desc()).first()
+            if last_conv:
+                st.session_state.messages = last_conv.messages
+            return True
+        return False
+    finally:
+        db.close()
+
+def signup_user(username, password):
+    """Create new user account and return success status."""
+    db = get_db_session()
+    try:
+        if db.query(User).filter(User.username == username).first():
+            return False
+        user = User(username=username)
+        user.set_password(password)
+        db.add(user)
+        db.commit()
+        st.session_state.user_id = user.id
+        st.session_state.username = user.username
+        return True
+    finally:
+        db.close()
+
+def save_api_keys():
+    """Save API keys to user's profile."""
+    if st.session_state.user_id:
+        db = get_db_session()
+        try:
+            user = db.query(User).get(st.session_state.user_id)
+            if user:
+                user.deepseek_api_key = st.session_state.get('DEEPSEEK_API_KEY')
+                user.groq_api_key = st.session_state.get('GROQ_API_KEY')
+                db.commit()
+        finally:
+            db.close()
+
+def save_conversation():
+    """Save current conversation to database."""
+    if st.session_state.user_id and 'messages' in st.session_state:
+        db = get_db_session()
+        try:
+            conv = db.query(Conversation).filter(
+                Conversation.user_id == st.session_state.user_id
+            ).order_by(Conversation.updated_at.desc()).first()
+            
+            if conv:
+                conv.messages = st.session_state.messages
+                conv.updated_at = datetime.utcnow()
+            else:
+                conv = Conversation(
+                    user_id=st.session_state.user_id,
+                    messages=st.session_state.messages
+                )
+                db.add(conv)
+            db.commit()
+        finally:
+            db.close()
+
+def logout_user():
+    """Logout user and clear session state."""
+    save_conversation()  # Save conversation before logging out
+    st.session_state.user_id = None
+    st.session_state.username = None
+    st.session_state.messages = []
+    st.session_state.suggestions = []
+    if 'DEEPSEEK_API_KEY' in st.session_state:
+        del st.session_state['DEEPSEEK_API_KEY']
+    if 'GROQ_API_KEY' in st.session_state:
+        del st.session_state['GROQ_API_KEY']
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -562,32 +659,78 @@ if 'suggestions' not in st.session_state:
 
 # Sidebar with setup and model selection
 with st.sidebar:
-    st.title("About")
-    st.write("""
-    This Historical Chat Bot combines information from Wikipedia with AI-powered insights 
-    to provide comprehensive answers to your historical questions.
-    
-    Ask any question about history, and I'll provide detailed answers with clickable 
-    Wikipedia links for key people, places, events, and concepts.
-    """)
-    
-    st.title("Setup")
-    st.session_state['model_choice'] = st.selectbox(
-        "Choose AI Model:",
-        ["Groq (Free)", "Deepseek (Requires API Key)"],
-        help="Groq is free to use. Deepseek requires your own API key."
-    )
-    
-    if st.session_state['model_choice'] == "Deepseek (Requires API Key)":
-        api_key = st.text_input("Enter your Deepseek API key:", type="password", help="Your API key will only be stored for this session")
-        if api_key:
-            st.session_state['DEEPSEEK_API_KEY'] = api_key
-            st.success("Deepseek API key saved for this session!")
+    if not st.session_state.user_id:
+        st.title("Login / Sign Up")
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        
+        with tab1:
+            login_username = st.text_input("Username", key="login_username")
+            login_password = st.text_input("Password", type="password", key="login_password")
+            if st.button("Login"):
+                if login_user(login_username, login_password):
+                    st.success(f"Welcome back, {login_username}!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
+        
+        with tab2:
+            signup_username = st.text_input("Choose Username", key="signup_username")
+            signup_password = st.text_input("Choose Password", type="password", key="signup_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
+            if st.button("Sign Up"):
+                if signup_password != confirm_password:
+                    st.error("Passwords do not match")
+                elif len(signup_password) < 6:
+                    st.error("Password must be at least 6 characters")
+                elif signup_user(signup_username, signup_password):
+                    st.success("Account created successfully!")
+                    st.rerun()
+                else:
+                    st.error("Username already exists")
     else:
-        api_key = st.text_input("Enter your Groq API key:", type="password", help="Get a free API key from groq.com")
-        if api_key:
-            st.session_state['GROQ_API_KEY'] = api_key
-            st.success("Groq API key saved for this session!")
+        st.title(f"Welcome, {st.session_state.username}!")
+        if st.button("Logout"):
+            logout_user()
+            st.rerun()
+        
+        st.title("Setup")
+        st.session_state['model_choice'] = st.selectbox(
+            "Choose AI Model:",
+            ["Groq (Free)", "Deepseek (Requires API Key)"],
+            help="Groq is free to use. Deepseek requires your own API key."
+        )
+        
+        if st.session_state['model_choice'] == "Deepseek (Requires API Key)":
+            api_key = st.text_input(
+                "Enter your Deepseek API key:", 
+                type="password",
+                value=st.session_state.get('DEEPSEEK_API_KEY', ''),
+                help="Your API key will be saved to your account"
+            )
+            if api_key:
+                st.session_state['DEEPSEEK_API_KEY'] = api_key
+                save_api_keys()
+                st.success("Deepseek API key saved!")
+        else:
+            api_key = st.text_input(
+                "Enter your Groq API key:", 
+                type="password",
+                value=st.session_state.get('GROQ_API_KEY', ''),
+                help="Get a free API key from groq.com"
+            )
+            if api_key:
+                st.session_state['GROQ_API_KEY'] = api_key
+                save_api_keys()
+                st.success("Groq API key saved!")
+            
+            st.title("About")
+            st.write("""
+            This Historical Chat Bot combines information from Wikipedia with AI-powered insights 
+            to provide comprehensive answers to your historical questions.
+            
+            Ask any question about history, and I'll provide detailed answers with clickable 
+            Wikipedia links for key people, places, events, and concepts.
+            """)
 
 def get_audio_base64(text):
     """Generate audio from text and return as base64."""
@@ -663,6 +806,10 @@ for idx, message in enumerate(st.session_state.messages):
 
 # Chat input
 if prompt := st.chat_input("What would you like to know about history?"):
+    if not st.session_state.user_id:
+        st.error("Please login or sign up to start chatting")
+        st.stop()
+        
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt, unsafe_allow_html=True)
@@ -675,4 +822,5 @@ if prompt := st.chat_input("What would you like to know about history?"):
         response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
+    save_conversation()  # Save after each message
     st.rerun() 
