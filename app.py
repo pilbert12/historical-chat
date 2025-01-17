@@ -305,19 +305,38 @@ def get_wikipedia_content(query):
     """Search Wikipedia and get content for the query."""
     try:
         # Search for the query
-        search_results = wikipedia.search(query, results=3)
+        search_results = wikipedia.search(query, results=5)  # Increased from 3 to 5 results
         
         if not search_results:
             return None
             
         wiki_content = []
+        seen_content = set()  # To avoid duplicate content
         
         # Get content for each result
         for title in search_results:
             try:
                 page = wiki.page(title)
                 if page.exists():
-                    wiki_content.append(page.summary[0:500])
+                    # Get both summary and first section of the main content
+                    summary = page.summary[0:1000]  # Increased from 500 to 1000 chars
+                    
+                    # Only add if content is unique
+                    if summary not in seen_content:
+                        seen_content.add(summary)
+                        wiki_content.append(f"From article '{title}':\n{summary}")
+                        
+                        # Get sections and include the first relevant section if available
+                        sections = page.sections
+                        if sections:
+                            for section in sections[:2]:  # Look at first 2 sections
+                                section_text = page.section_by_title(section)
+                                if len(section_text) > 100:  # Only include substantial sections
+                                    section_summary = section_text[:500]
+                                    if section_summary not in seen_content:
+                                        seen_content.add(section_summary)
+                                        wiki_content.append(f"Additional context from section '{section}':\n{section_summary}")
+                                        break  # Only include one additional section
             except Exception as e:
                 continue
         
@@ -536,13 +555,30 @@ Mark EVERY important term, and ensure proper hierarchy through your marking."""
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
     try:
+        # Extract key terms from the prompt for better Wikipedia searching
+        doc = nlp(prompt)
+        key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
+        
+        # Get additional wiki content for key terms if needed
+        additional_content = []
+        for term in key_terms:
+            if term.lower() not in wiki_content.lower():
+                extra_content = get_wikipedia_content(term)
+                if extra_content:
+                    additional_content.append(extra_content)
+        
+        # Combine all wiki content
+        full_wiki_content = wiki_content
+        if additional_content:
+            full_wiki_content += "\n\nAdditional relevant information:\n" + "\n\n".join(additional_content)
+        
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
         if model_choice == "Deepseek (Requires API Key)":
-            return get_deepseek_response(prompt, wiki_content)
+            return get_deepseek_response(prompt, full_wiki_content)
         else:
-            return get_groq_response(prompt, wiki_content)
+            return get_groq_response(prompt, full_wiki_content)
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
