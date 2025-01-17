@@ -104,9 +104,17 @@ def add_wiki_links(text):
 def validate_wiki_content(text, title):
     """Validate that the Wikipedia content is relevant to the query."""
     try:
-        # Skip literary/fictional content
-        literary_terms = {'novel', 'fiction', 'literary', 'literature', 'story', 'stories', 'author', 'writer', 'poem', 'poetry'}
-        if any(term in title.lower() for term in literary_terms) or any(term in text.lower()[:200] for term in literary_terms):
+        # Skip literary/fictional/media content
+        irrelevant_terms = {
+            'novel', 'fiction', 'literary', 'literature', 'story', 'stories', 
+            'author', 'writer', 'poem', 'poetry', 'television', 'tv', 'series',
+            'episode', 'show', 'movie', 'film', 'anime', 'manga', 'comic'
+        }
+        
+        # Check title and first paragraph for irrelevant terms
+        if any(term in title.lower() for term in irrelevant_terms):
+            return False
+        if any(term in text.lower()[:500] for term in irrelevant_terms):
             return False
             
         # Extract key terms from the content
@@ -118,11 +126,23 @@ def validate_wiki_content(text, title):
         entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
         
         # Check for historical indicators
-        historical_terms = {'history', 'century', 'ancient', 'period', 'era', 'historical', 'invention', 'development', 'discovery'}
-        has_historical_context = any(term in text.lower() for term in historical_terms)
+        historical_terms = {
+            'history', 'century', 'ancient', 'period', 'era', 'historical',
+            'empire', 'kingdom', 'dynasty', 'ruler', 'reign', 'conquest',
+            'civilization', 'culture', 'society', 'development'
+        }
         
-        # Require both term matches and historical context
-        is_relevant = (term_matches > 0 or entity_overlap > 0) and has_historical_context
+        # Require stronger historical context
+        historical_context_score = sum(1 for term in historical_terms if term in text.lower())
+        
+        # Article must have:
+        # 1. Multiple term matches or entity overlaps
+        # 2. Strong historical context
+        # 3. No irrelevant terms
+        is_relevant = (
+            (term_matches >= 2 or entity_overlap >= 2) and
+            historical_context_score >= 2
+        )
         
         return is_relevant
         
@@ -288,7 +308,13 @@ def get_groq_response(prompt, wiki_content):
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
+        full_prompt = f"""You are a historian specializing in providing accurate historical information. Your task is to answer the user's question using ONLY the Wikipedia content provided below. 
+
+IMPORTANT: 
+- Use ONLY information from the provided Wikipedia content
+- Do NOT include any external knowledge or assumptions
+- If the Wikipedia content doesn't fully answer the question, acknowledge what information you do have
+- Stay focused on the historical aspects of the topic
 
 Wikipedia Content:
 {wiki_content}
@@ -298,32 +324,29 @@ Previous Conversation:
 
 Current Question: {prompt}
 
-CRITICAL FORMATTING REQUIREMENTS:
-1. You MUST mark ALL important terms in your response using these exact markers:
-   - [1][term] for major historical figures, key events, and primary concepts
+FORMAT YOUR RESPONSE:
+1. Mark important terms using these exact markers:
+   - [1][term] for major historical figures, events, and primary concepts
    - [2][term] for dates, places, and technical terms
-   - [3][term] for supporting concepts and contextual details
+   - [3][term] for supporting details
    Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566].
 
-2. Use ONLY information from the provided Wikipedia content.
+2. Write in a clear, natural style without section headers or numbering.
 
-3. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
-
-Keep your response natural and flowing, without section headers or numbering. Ensure your response is complete and not cut off."""
+3. End with three follow-up questions, each on a new line starting with [SUGGESTION]"""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a knowledgeable historical chatbot. You MUST mark ALL important terms in your response using these exact markers:
-- [1][term] for major historical figures, key events, and primary concepts
-- [2][term] for dates, places, and technical terms
-- [3][term] for supporting concepts and contextual details
-
-Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566].
-
-Ensure your response is complete and not cut off."""
+                    "content": """You are a historian specializing in providing accurate historical information. Your responses must:
+1. Use ONLY information from the provided Wikipedia content
+2. Stay focused on historical facts and developments
+3. Mark important terms with:
+   - [1][term] for major figures and events
+   - [2][term] for dates and places
+   - [3][term] for supporting details"""
                 },
                 {
                     "role": "user",
@@ -333,7 +356,7 @@ Ensure your response is complete and not cut off."""
             temperature=0.7,
             max_tokens=4096,
             top_p=1,
-            stream=False  # Ensure we get complete responses
+            stream=False
         )
         
         response_text = completion.choices[0].message.content.strip()
