@@ -379,50 +379,27 @@ def get_wikipedia_content(query):
         key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
         search_progress.markdown("📚 Building search strategy...")
         
-        # Generate broader search terms
+        # Generate search terms
         search_terms = []
         
-        # Economic/industry specific terms for better context
-        industry_terms = [
-            "economic history",
-            "industrial history",
-            "industry statistics",
-            "economic statistics",
-            "industrial production",
-            "economic growth",
-            "major industries",
-            "industrial development",
-            "economic sectors",
-            "business history"
-        ]
-        
-        # If we have a year, prioritize searches with that year
+        # If we have a year, add year-based searches
         if years:
             for year in years:
-                # Add year-specific search terms
                 search_terms.extend([
                     f"{year} in history",
                     f"historical events {year}",
-                    f"{year} history",
-                    f"economy in {year}",
-                    f"industrial history {year}",
-                    f"economic conditions {year}",
+                    f"{year} history"
                 ])
-                # Combine year with other key terms
+                # Combine year with key terms
                 for term in key_terms:
                     search_terms.append(f"{term} {year}")
-                # Add industry-specific year combinations
-                for term in industry_terms:
-                    search_terms.append(f"{term} {year}")
         
-        # Add general historical search terms
+        # Add general search terms
         search_terms.extend([
             query + " historical event",
             query + " in history",
-            query + " economic history",
-            query + " industrial history",
             query
-        ] + key_terms + industry_terms)
+        ] + key_terms)
         
         # Remove duplicates while preserving order
         search_terms = list(dict.fromkeys(search_terms))
