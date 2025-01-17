@@ -1093,6 +1093,8 @@ if prompt := st.chat_input("What would you like to know about history?"):
 def get_ai_search_terms(query, model_choice):
     """Generate intelligent search terms using AI."""
     try:
+        st.write("Debug: Starting search term generation...")
+        
         # Build search strategy prompt
         strategy_prompt = f"""As a historical research assistant, analyze this query and develop a comprehensive search strategy.
 
@@ -1105,96 +1107,114 @@ Create a search strategy that will help find relevant Wikipedia articles. Consid
 4. Alternative names or terms that might be used
 5. Broader historical context and related topics
 
-For example, for "Who were the top figures in China in 1678":
-- "China Qing Dynasty 1678"
-- "Kangxi Emperor 1678"
-- "Chinese government officials 1678"
-- "Chinese military leaders 1678"
-- "Chinese scholars 1678"
-- "Important Chinese people 17th century"
-- "China history 1670s"
-- "Qing Dynasty politics"
-- "Chinese imperial court"
-- "Chinese civil service system"
+Respond with ONLY a JSON array of search terms, ordered from most specific to most general. Example:
+["term 1", "term 2", "term 3"]"""
 
-Respond with ONLY a JSON array of search terms, ordered from most specific to most general. Include at least 10 variations."""
-
+        st.write(f"Debug: Using model: {model_choice}")
+        
         # Get AI-generated search strategy
         if model_choice == "Deepseek (Requires API Key)":
             api_key = st.session_state.get('DEEPSEEK_API_KEY')
             if not api_key:
+                st.write("Debug: No Deepseek API key found")
                 return None
                 
-            headers = {
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            }
-            
-            response = requests.post(
-                'https://api.deepseek.com/v1/chat/completions',
-                headers=headers,
-                json={
-                    'model': 'deepseek-chat',
-                    'messages': [
-                        {
-                            'role': 'system',
-                            'content': 'You are a historical research assistant. Generate a diverse set of search terms, from specific to general. Respond only with a JSON array.'
-                        },
-                        {
-                            'role': 'user',
-                            'content': strategy_prompt
-                        }
-                    ],
-                    'temperature': 0.7
-                },
-                timeout=10  # 10 second timeout
-            )
-            search_terms = json.loads(response.json()['choices'][0]['message']['content'])
+            try:
+                headers = {
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                }
+                
+                st.write("Debug: Sending request to Deepseek API...")
+                response = requests.post(
+                    'https://api.deepseek.com/v1/chat/completions',
+                    headers=headers,
+                    json={
+                        'model': 'deepseek-chat',
+                        'messages': [
+                            {
+                                'role': 'system',
+                                'content': 'You are a historical research assistant. Respond only with a JSON array of search terms.'
+                            },
+                            {
+                                'role': 'user',
+                                'content': strategy_prompt
+                            }
+                        ],
+                        'temperature': 0.7
+                    },
+                    timeout=10
+                )
+                st.write("Debug: Got response from Deepseek API")
+                st.write(f"Debug: Response status: {response.status_code}")
+                st.write(f"Debug: Response content: {response.text[:200]}...")
+                
+                search_terms = json.loads(response.json()['choices'][0]['message']['content'])
+                st.write(f"Debug: Parsed search terms: {search_terms[:3]}...")
+                
+            except Exception as e:
+                st.write(f"Debug: Deepseek API error: {str(e)}")
+                raise e
             
         else:
             api_key = st.session_state.get('GROQ_API_KEY')
             if not api_key:
+                st.write("Debug: No Groq API key found")
                 return None
                 
-            client = Groq(api_key=api_key)
-            
-            completion = client.chat.completions.create(
-                model="mixtral-8x7b-32768",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a historical research assistant. Generate a diverse set of search terms, from specific to general. Respond only with a JSON array."
-                    },
-                    {
-                        "role": "user",
-                        "content": strategy_prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=500,
-                top_p=1,
-                request_timeout=10  # 10 second timeout
-            )
-            
-            search_terms = json.loads(completion.choices[0].message.content)
+            try:
+                st.write("Debug: Initializing Groq client...")
+                client = Groq(api_key=api_key)
+                
+                st.write("Debug: Sending request to Groq API...")
+                completion = client.chat.completions.create(
+                    model="mixtral-8x7b-32768",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a historical research assistant. Respond only with a JSON array of search terms."
+                        },
+                        {
+                            "role": "user",
+                            "content": strategy_prompt
+                        }
+                    ],
+                    temperature=0.7,
+                    max_tokens=500,
+                    top_p=1,
+                    request_timeout=10
+                )
+                st.write("Debug: Got response from Groq API")
+                st.write(f"Debug: Response content: {completion.choices[0].message.content[:200]}...")
+                
+                search_terms = json.loads(completion.choices[0].message.content)
+                st.write(f"Debug: Parsed search terms: {search_terms[:3]}...")
+                
+            except Exception as e:
+                st.write(f"Debug: Groq API error: {str(e)}")
+                raise e
         
         # Validate and clean up search terms
         if not isinstance(search_terms, list):
+            st.write("Debug: AI did not return a list")
             raise ValueError("AI did not return a list of search terms")
             
         # Remove any empty or non-string terms
         search_terms = [str(term).strip() for term in search_terms if term and isinstance(term, (str, int, float))]
+        st.write(f"Debug: Cleaned terms count: {len(search_terms)}")
         
         # Remove duplicates while preserving order
         seen = set()
         search_terms = [x for x in search_terms if not (x.lower() in seen or seen.add(x.lower()))]
+        st.write(f"Debug: Final terms count after deduplication: {len(search_terms)}")
         
         # Ensure we have at least some terms
         if not search_terms:
+            st.write("Debug: No valid search terms after cleanup")
             raise ValueError("No valid search terms generated")
             
         return search_terms
         
     except Exception as e:
-        st.error(f"Error generating search terms: {str(e)}")
+        st.write(f"Debug: Final error in get_ai_search_terms: {str(e)}")
         return None 
