@@ -13,55 +13,19 @@ from groq import Groq
 from models import User, Conversation, get_db_session
 from datetime import datetime
 
-# Initialize session state for authentication
+# Initialize session states
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
 if 'username' not in st.session_state:
     st.session_state.username = None
 if 'current_conversation_id' not in st.session_state:
     st.session_state.current_conversation_id = None
-
-def login_user(username, password):
-    """Login user and return success status."""
-    db = get_db_session()
-    try:
-        user = db.query(User).filter(User.username == username).first()
-        if user and user.check_password(password):
-            user.last_login = datetime.utcnow()
-            db.commit()
-            st.session_state.user_id = user.id
-            st.session_state.username = user.username
-            # Load user's API keys
-            if user.deepseek_api_key:
-                st.session_state['DEEPSEEK_API_KEY'] = user.deepseek_api_key
-            if user.groq_api_key:
-                st.session_state['GROQ_API_KEY'] = user.groq_api_key
-            # Load last conversation
-            last_conv = db.query(Conversation).filter(
-                Conversation.user_id == user.id
-            ).order_by(Conversation.updated_at.desc()).first()
-            if last_conv:
-                st.session_state.messages = last_conv.messages
-            return True
-        return False
-    finally:
-        db.close()
-
-def signup_user(username, password):
-    """Create new user account and return success status."""
-    db = get_db_session()
-    try:
-        if db.query(User).filter(User.username == username).first():
-            return False
-        user = User(username=username)
-        user.set_password(password)
-        db.add(user)
-        db.commit()
-        st.session_state.user_id = user.id
-        st.session_state.username = user.username
-        return True
-    finally:
-        db.close()
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'suggestions' not in st.session_state:
+    st.session_state.suggestions = []
+if 'wiki_references' not in st.session_state:
+    st.session_state.wiki_references = []
 
 def save_api_keys():
     """Save API keys to user's profile."""
@@ -76,9 +40,42 @@ def save_api_keys():
         finally:
             db.close()
 
+def get_user_conversations():
+    """Get all conversations for the current user."""
+    if not st.session_state.user_id:
+        return []
+    db = get_db_session()
+    try:
+        conversations = db.query(Conversation).filter(
+            Conversation.user_id == st.session_state.user_id
+        ).order_by(Conversation.updated_at.desc()).all()
+        return conversations or []
+    finally:
+        db.close()
+
+def load_conversation(conv_id):
+    """Load a specific conversation."""
+    db = get_db_session()
+    try:
+        conv = db.query(Conversation).get(conv_id)
+        if conv and conv.user_id == st.session_state.user_id:
+            st.session_state.messages = conv.messages or []
+            st.session_state.current_conversation_id = conv_id
+            st.session_state.suggestions = []
+    finally:
+        db.close()
+
+def create_new_conversation():
+    """Create a new conversation."""
+    if st.session_state.messages:
+        save_conversation()
+    st.session_state.messages = []
+    st.session_state.suggestions = []
+    st.session_state.current_conversation_id = None
+
 def save_conversation():
     """Save current conversation to database."""
-    if st.session_state.user_id and 'messages' in st.session_state and st.session_state.messages:
+    if st.session_state.user_id and st.session_state.messages:
         db = get_db_session()
         try:
             if st.session_state.current_conversation_id:
@@ -100,10 +97,55 @@ def save_conversation():
         finally:
             db.close()
 
+def login_user(username, password):
+    """Login user and return success status."""
+    db = get_db_session()
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        if user and user.check_password(password):
+            user.last_login = datetime.utcnow()
+            db.commit()
+            st.session_state.user_id = user.id
+            st.session_state.username = user.username
+            # Load user's API keys
+            if user.deepseek_api_key:
+                st.session_state['DEEPSEEK_API_KEY'] = user.deepseek_api_key
+            if user.groq_api_key:
+                st.session_state['GROQ_API_KEY'] = user.groq_api_key
+            # Load last conversation
+            last_conv = db.query(Conversation).filter(
+                Conversation.user_id == user.id
+            ).order_by(Conversation.updated_at.desc()).first()
+            if last_conv:
+                st.session_state.messages = last_conv.messages or []
+                st.session_state.current_conversation_id = last_conv.id
+            return True
+        return False
+    finally:
+        db.close()
+
+def signup_user(username, password):
+    """Create new user account and return success status."""
+    db = get_db_session()
+    try:
+        if db.query(User).filter(User.username == username).first():
+            return False
+        user = User(username=username)
+        user.set_password(password)
+        db.add(user)
+        db.commit()
+        st.session_state.user_id = user.id
+        st.session_state.username = user.username
+        st.session_state.messages = []
+        st.session_state.current_conversation_id = None
+        return True
+    finally:
+        db.close()
+
 def logout_user():
     """Logout user and clear session state."""
-    if st.session_state.messages:  # Only save if there are messages
-        save_conversation()  # Save conversation before logging out
+    if st.session_state.messages:
+        save_conversation()
     st.session_state.user_id = None
     st.session_state.username = None
     st.session_state.messages = []
@@ -649,19 +691,9 @@ def get_ai_response(prompt, wiki_content):
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
-# Initialize session state for wiki references if not exists
-if 'wiki_references' not in st.session_state:
-    st.session_state.wiki_references = []
-
 # Main content area
 st.markdown('<h1>Historical Chat Bot</h1>', unsafe_allow_html=True)
 st.markdown('<p>Ask me anything about history! I\'ll combine Wikipedia knowledge with AI insights.</p>', unsafe_allow_html=True)
-
-# Chat history and input
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'suggestions' not in st.session_state:
-    st.session_state.suggestions = []
 
 # Sidebar with setup and model selection
 with st.sidebar:
@@ -785,38 +817,6 @@ def get_audio_base64(text):
         st.error(f"Error generating audio: {str(e)}")
         return None
 
-def get_user_conversations():
-    """Get all conversations for the current user."""
-    if not st.session_state.user_id:
-        return []
-    db = get_db_session()
-    try:
-        conversations = db.query(Conversation).filter(
-            Conversation.user_id == st.session_state.user_id
-        ).order_by(Conversation.updated_at.desc()).all()
-        return conversations or []  # Return empty list if no conversations
-    finally:
-        db.close()
-
-def load_conversation(conv_id):
-    """Load a specific conversation."""
-    db = get_db_session()
-    try:
-        conv = db.query(Conversation).get(conv_id)
-        if conv and conv.user_id == st.session_state.user_id:
-            st.session_state.messages = conv.messages or []  # Initialize empty if None
-            st.session_state.current_conversation_id = conv_id
-    finally:
-        db.close()
-
-def create_new_conversation():
-    """Create a new conversation."""
-    if st.session_state.messages:  # Only save if there are messages
-        save_conversation()  # Save current conversation if exists
-    st.session_state.messages = []
-    st.session_state.suggestions = []
-    st.session_state.current_conversation_id = None
-    
 # Display chat history
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
