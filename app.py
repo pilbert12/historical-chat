@@ -156,6 +156,26 @@ def logout_user():
     if 'GROQ_API_KEY' in st.session_state:
         del st.session_state['GROQ_API_KEY']
 
+def delete_conversation(conv_id):
+    """Delete a specific conversation."""
+    if not st.session_state.user_id:
+        return False
+    db = get_db_session()
+    try:
+        conv = db.query(Conversation).get(conv_id)
+        if conv and conv.user_id == st.session_state.user_id:
+            # If we're deleting the current conversation, clear the state
+            if st.session_state.current_conversation_id == conv_id:
+                st.session_state.messages = []
+                st.session_state.suggestions = []
+                st.session_state.current_conversation_id = None
+            db.delete(conv)
+            db.commit()
+            return True
+        return False
+    finally:
+        db.close()
+
 # Add custom CSS for layout and styling
 st.markdown("""
 <style>
@@ -748,13 +768,20 @@ with st.sidebar:
                     first_msg = conv.messages[0]["content"]
                     title = first_msg[:50] + "..." if len(first_msg) > 50 else first_msg
                 
-                col1, col2 = st.columns([0.7, 0.3])
+                col1, col2, col3 = st.columns([0.6, 0.2, 0.2])
                 with col1:
                     if st.button(f"📝 {title}", key=f"conv_{conv.id}"):
                         load_conversation(conv.id)
                         st.rerun()
                 with col2:
                     st.write(conv.updated_at.strftime("%Y-%m-%d"))
+                with col3:
+                    if st.button("🗑️", key=f"del_{conv.id}", help="Delete conversation"):
+                        if delete_conversation(conv.id):
+                            st.success("Conversation deleted")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete conversation")
         
         st.title("Setup")
         st.session_state['model_choice'] = st.selectbox(
