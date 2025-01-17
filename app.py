@@ -330,30 +330,35 @@ def get_wikipedia_content(query):
 def get_deepseek_response(prompt, wiki_content):
     """Get response from Deepseek API with follow-up suggestions."""
     try:
-        api_key = st.secrets["DEEPSEEK_API_KEY"]
-    except:
-        return "Error: Deepseek API key not found. Please configure it in Streamlit Cloud settings."
-
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    # Build conversation history context
-    conversation_context = ""
-    if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-        # Get last few exchanges, but limit to keep context manageable
-        recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
-        conversation_context = "\nPrevious conversation:\n"
-        for msg in recent_messages:
-            role = "User" if msg["role"] == "user" else "Assistant"
-            # Clean up any HTML/markdown from previous responses
-            content = re.sub(r'<[^>]+>', '', msg["content"])
-            content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-            conversation_context += f"{role}: {content}\n"
-    
-    # Combine wiki content with user's question and conversation context
-    full_prompt = f"""Context from Wikipedia: {wiki_content}
+        # First try to get API key from session state
+        api_key = st.session_state.get('DEEPSEEK_API_KEY')
+        if not api_key:
+            # If not in session state, try to get from secrets
+            try:
+                api_key = st.secrets["DEEPSEEK_API_KEY"]
+            except:
+                return "Please enter your Deepseek API key in the sidebar to continue."
+        
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Build conversation history context
+        conversation_context = ""
+        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
+            # Get last few exchanges, but limit to keep context manageable
+            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
+            conversation_context = "\nPrevious conversation:\n"
+            for msg in recent_messages:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                # Clean up any HTML/markdown from previous responses
+                content = re.sub(r'<[^>]+>', '', msg["content"])
+                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
+                conversation_context += f"{role}: {content}\n"
+        
+        # Combine wiki content with user's question and conversation context
+        full_prompt = f"""Context from Wikipedia: {wiki_content}
 {conversation_context}
 Current Question: {prompt}
 
@@ -368,51 +373,53 @@ PART 2: Provide three follow-up questions that build upon both the current topic
 
 Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
 
-    try:
-        response = requests.post(
-            'https://api.deepseek.com/v1/chat/completions',
-            headers=headers,
-            json={
-                'model': 'deepseek-chat',
-                'messages': [{'role': 'user', 'content': full_prompt}]
-            }
-        )
-        response_text = response.json()['choices'][0]['message']['content']
-        
-        # Split response and suggestions
-        parts = response_text.split('[SUGGESTION]')
-        main_response = parts[0].strip()
-        suggestions = [s.strip() for s in parts[1:] if s.strip()]
-        
-        # Clean up formatting artifacts
-        main_response = re.sub(r'PART \d:', '', main_response)
-        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-        main_response = re.sub(r'\d\. ', '', main_response)
-        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-        
-        # Process the main response
-        main_response = re.sub(r'https?://\S+', '', main_response)
-        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-        
-        # Process importance markers in main response
-        for level in range(1, 4):
-            main_response = re.sub(
-                f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: create_wiki_link(m.group(1), 
-                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                main_response
+        try:
+            response = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': [{'role': 'user', 'content': full_prompt}]
+                }
             )
-        
-        # Clean up extra spaces and normalize whitespace
-        main_response = re.sub(r'\s+', ' ', main_response)
-        main_response = main_response.strip()
-        
-        # Store suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
-        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
-        
-        return f'<div>{main_response}</div>'
+            response_text = response.json()['choices'][0]['message']['content']
+            
+            # Split response and suggestions
+            parts = response_text.split('[SUGGESTION]')
+            main_response = parts[0].strip()
+            suggestions = [s.strip() for s in parts[1:] if s.strip()]
+            
+            # Clean up formatting artifacts
+            main_response = re.sub(r'PART \d:', '', main_response)
+            main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+            main_response = re.sub(r'\d\. ', '', main_response)
+            main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+            
+            # Process the main response
+            main_response = re.sub(r'https?://\S+', '', main_response)
+            main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+            
+            # Process importance markers in main response
+            for level in range(1, 4):
+                main_response = re.sub(
+                    f'\\[{level}\\]\\[([^\\]]+)\\]',
+                    lambda m: create_wiki_link(m.group(1), 
+                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                    main_response
+                )
+            
+            # Clean up extra spaces and normalize whitespace
+            main_response = re.sub(r'\s+', ' ', main_response)
+            main_response = main_response.strip()
+            
+            # Store suggestions in session state
+            if 'suggestions' not in st.session_state:
+                st.session_state.suggestions = []
+            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
+            
+            return f'<div>{main_response}</div>'
+        except Exception as e:
+            return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
         return f"Error communicating with Deepseek API: {str(e)}"
 
@@ -526,7 +533,7 @@ if prompt := st.chat_input("What would you like to know about history?"):
     st.session_state.messages.append({"role": "assistant", "content": response})
     st.experimental_rerun()
 
-# Sidebar with setup instructions
+# Sidebar with setup instructions and API key input
 with st.sidebar:
     st.title("About")
     st.write("""
@@ -538,8 +545,103 @@ with st.sidebar:
     """)
     
     st.title("Setup")
-    st.write("""
-    1. Create a `.env` file
-    2. Add your Deepseek API key
-    3. Run the app using `streamlit run app.py`
-    """) 
+    api_key = st.text_input("Enter your Deepseek API key:", type="password", help="Your API key will only be stored for this session")
+    if api_key:
+        st.session_state['DEEPSEEK_API_KEY'] = api_key
+        st.success("API key saved for this session!")
+
+def get_deepseek_response(prompt, wiki_content):
+    """Get response from Deepseek API with follow-up suggestions."""
+    try:
+        # First try to get API key from session state
+        api_key = st.session_state.get('DEEPSEEK_API_KEY')
+        if not api_key:
+            # If not in session state, try to get from secrets
+            try:
+                api_key = st.secrets["DEEPSEEK_API_KEY"]
+            except:
+                return "Please enter your Deepseek API key in the sidebar to continue."
+        
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Build conversation history context
+        conversation_context = ""
+        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
+            # Get last few exchanges, but limit to keep context manageable
+            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
+            conversation_context = "\nPrevious conversation:\n"
+            for msg in recent_messages:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                # Clean up any HTML/markdown from previous responses
+                content = re.sub(r'<[^>]+>', '', msg["content"])
+                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
+                conversation_context += f"{role}: {content}\n"
+        
+        # Combine wiki content with user's question and conversation context
+        full_prompt = f"""Context from Wikipedia: {wiki_content}
+{conversation_context}
+Current Question: {prompt}
+
+Respond in two parts:
+
+PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
+- [1][term] for major historical figures, key events, primary concepts
+- [2][term] for dates, places, technical terms
+- [3][term] for related concepts and supporting details
+
+PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
+
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+
+        try:
+            response = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': [{'role': 'user', 'content': full_prompt}]
+                }
+            )
+            response_text = response.json()['choices'][0]['message']['content']
+            
+            # Split response and suggestions
+            parts = response_text.split('[SUGGESTION]')
+            main_response = parts[0].strip()
+            suggestions = [s.strip() for s in parts[1:] if s.strip()]
+            
+            # Clean up formatting artifacts
+            main_response = re.sub(r'PART \d:', '', main_response)
+            main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+            main_response = re.sub(r'\d\. ', '', main_response)
+            main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+            
+            # Process the main response
+            main_response = re.sub(r'https?://\S+', '', main_response)
+            main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+            
+            # Process importance markers in main response
+            for level in range(1, 4):
+                main_response = re.sub(
+                    f'\\[{level}\\]\\[([^\\]]+)\\]',
+                    lambda m: create_wiki_link(m.group(1), 
+                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                    main_response
+                )
+            
+            # Clean up extra spaces and normalize whitespace
+            main_response = re.sub(r'\s+', ' ', main_response)
+            main_response = main_response.strip()
+            
+            # Store suggestions in session state
+            if 'suggestions' not in st.session_state:
+                st.session_state.suggestions = []
+            st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
+            
+            return f'<div>{main_response}</div>'
+        except Exception as e:
+            return f"Error communicating with Deepseek API: {str(e)}"
+    except Exception as e:
+        return f"Error communicating with Deepseek API: {str(e)}" 
