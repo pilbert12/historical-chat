@@ -280,13 +280,9 @@ def load_spacy_model():
 nlp = load_spacy_model()
 
 def create_wiki_link(text, importance):
-    """Create a Wikipedia search link with proper formatting."""
-    # Clean up the text and create a proper search URL
-    clean_text = text.strip()
-    search_url = f"https://en.wikipedia.org/wiki/Special:Search/{urllib.parse.quote(clean_text)}"
-    
-    # Return properly formatted HTML with data-importance attribute
-    return f'<a href="{search_url}" class="wiki-link" data-importance="{importance}">{clean_text}</a>'
+    """Create a Wikipedia link with proper styling based on importance."""
+    search_url = f"https://en.wikipedia.org/wiki/{text.replace(' ', '_')}"
+    return f'<a href="{search_url}" data-importance="{importance}">{text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -295,68 +291,12 @@ def add_wiki_links(text):
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Split text into sentences
-    sentences = text.split('. ')
-    result = []
-    processed_phrases = set()  # Track phrases we've already processed
+    # Process importance markers first
+    text = re.sub(r'\[1\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
+    text = re.sub(r'\[2\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
+    text = re.sub(r'\[3\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
     
-    for sentence in sentences:
-        if not sentence.strip():
-            continue
-        
-        # First, handle any existing importance markers
-        sentence = re.sub(r'\[\d+\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'important'), sentence)
-        
-        # Then process remaining words
-        words = sentence.split()
-        i = 0
-        phrase_result = []
-        
-        while i < len(words):
-            # Skip words that are already wrapped in HTML
-            if '<a href' in words[i]:
-                phrase_result.append(words[i])
-                i += 1
-                continue
-                
-            # Try 3-word phrases (highest importance)
-            if i + 2 < len(words):
-                phrase = ' '.join(words[i:i+3])
-                if (len(phrase) > 5 and 
-                    phrase.lower() not in processed_phrases and
-                    not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at']) and
-                    any(word[0].isupper() for word in words[i:i+3])):
-                    phrase_result.append(create_wiki_link(phrase, 'important'))
-                    processed_phrases.add(phrase.lower())
-                    i += 3
-                    continue
-            
-            # Try 2-word phrases (secondary importance)
-            if i + 1 < len(words):
-                phrase = ' '.join(words[i:i+2])
-                if (len(phrase) > 5 and 
-                    phrase.lower() not in processed_phrases and
-                    not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at']) and
-                    any(word[0].isupper() for word in words[i:i+2])):
-                    phrase_result.append(create_wiki_link(phrase, 'secondary'))
-                    processed_phrases.add(phrase.lower())
-                    i += 2
-                    continue
-            
-            # Single words
-            if (words[i][0].isupper() and len(words[i]) > 2 and 
-                words[i].lower() not in processed_phrases and
-                not any(word.lower() == words[i].lower() for word in ['the', 'and', 'or', 'but', 'with', 'from', 'to', 'of', 'in', 'on', 'at'])):
-                phrase_result.append(create_wiki_link(words[i], 'important' if i == 0 else 'secondary'))
-                processed_phrases.add(words[i].lower())
-            else:
-                phrase_result.append(words[i])
-            i += 1
-        
-        result.append(' '.join(phrase_result))
-    
-    final_text = '. '.join(result).strip()
-    return f'<div>{final_text}</div>'
+    return f'<div>{text}</div>'
 
 def validate_wiki_content(text, title):
     """Validate that the Wikipedia content is relevant to the query."""
