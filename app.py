@@ -499,6 +499,7 @@ def get_wikipedia_content(query):
         # Process main search results
         total_content_found = 0
         relevant_snippets = []
+        final_content = []  # Track final content separately
         
         for term in search_terms:
             try:
@@ -517,10 +518,16 @@ def get_wikipedia_content(query):
             except Exception as e:
                 continue
                 
+        # Sort content by relevance and prepare final content
+        wiki_content.sort(key=lambda x: x[1], reverse=True)
+        final_content = [content for content, _ in wiki_content[:8]]
+        initial_content_count = len(final_content)
+        
         # If we haven't found enough content, expand search
         if total_content_found < 3:
             search_progress.markdown("🔍 Expanding search with broader terms...")
             time.sleep(1)
+            
             for title in wikipedia.search(query, results=20):
                 content_before = len(wiki_content)
                 process_article(title)
@@ -528,22 +535,25 @@ def get_wikipedia_content(query):
                     total_content_found += 1
                     relevant_snippets.append(title)
                 if total_content_found >= 3:
+                    # Resort and update final content
+                    wiki_content.sort(key=lambda x: x[1], reverse=True)
+                    final_content = [content for content, _ in wiki_content[:8]]
                     break
 
         # Show final search completion message
-        content_count = len([c for c, s in wiki_content if s > 0])
+        final_content_count = len(final_content)
         search_progress.markdown(f"""✅ Search complete
-Found content from {content_count} sources""")
+Found content from {final_content_count} sources""")
         time.sleep(2)
         search_progress.empty()
 
         # Reset suggestions at the start of each new response
         st.session_state.suggestions = []
         
-        if wiki_content:
+        if final_content:
             # Store found articles in session state for reference
             st.session_state['last_wiki_articles'] = found_articles
-            return "\n\n".join([content for content, score in wiki_content[:8]])
+            return "\n\n".join(final_content)
         return None
     except Exception as e:
         st.error(f"Error searching Wikipedia: {str(e)}")
