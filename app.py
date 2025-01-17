@@ -793,68 +793,138 @@ Keep your response natural and flowing, without section headers or numbering. Fo
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
-def validate_wiki_content(text, title, key_terms=None):
-    """Validate that the Wikipedia content is relevant to the query."""
+def validate_content(prompt, response_text):
+    """Validate that the AI response stays on topic and relevant to the prompt."""
     try:
-        # If no key terms provided, extract them from the text
-        if key_terms is None:
-            doc = nlp(text[:1000])
-            key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
+        # Extract key terms from the prompt
+        prompt_doc = nlp(prompt)
+        prompt_entities = set([ent.text.lower() for ent in prompt_doc.ents])
+        prompt_nouns = set([token.text.lower() for token in prompt_doc if token.pos_ in ['PROPN', 'NOUN']])
+        prompt_key_terms = prompt_entities.union(prompt_nouns)
         
-        # Extract key terms from the content
-        doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
-        content_entities = set([ent.text.lower() for ent in doc.ents])
+        # Extract key terms from the response
+        response_doc = nlp(response_text)
+        response_entities = set([ent.text.lower() for ent in response_doc.ents])
         
-        # Extract dates and years
-        years = set()
-        for ent in doc.ents:
-            if ent.label_ == 'DATE':
-                # Try to extract year from date entity
-                year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
-                if year_match:
-                    years.add(year_match.group(0))
+        # Check if the response contains entities not related to the prompt
+        unrelated_entities = []
+        for entity in response_entities:
+            # Skip common words and short terms
+            if len(entity) < 4 or entity.lower() in {'the', 'a', 'an', 'this', 'that', 'these', 'those'}:
+                continue
+                
+            # Check if this entity is related to any prompt terms
+            is_related = False
+            for prompt_term in prompt_key_terms:
+                if (prompt_term in entity.lower() or 
+                    entity.lower() in prompt_term or 
+                    prompt_term.split()[-1] in entity.lower() or  # Check last word of multi-word terms
+                    entity.lower().split()[-1] in prompt_term):  # Check last word of multi-word entities
+                    is_related = True
+                    break
+            
+            if not is_related:
+                unrelated_entities.append(entity)
         
-        # If the title contains a year, it must be relevant to our key terms
-        title_year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', title)
-        if title_year_match:
-            title_year = title_year_match.group(0)
-            # Check if this year is relevant to our query
-            year_relevance = any(term.lower() in text.lower() for term in key_terms)
-            if not year_relevance:
+        if unrelated_entities:
+            # Create a new prompt to get a more focused response
+            correction_prompt = f"""Your previous response included unrelated topics: {', '.join(unrelated_entities)}
+            
+Please provide a new response that focuses ONLY on {prompt} without mentioning unrelated people, events, or concepts.
+Use the same Wikipedia content but stay strictly focused on the topic."""
+            
+            return False, correction_prompt
+            
+        return True, None
+        
+    except Exception as e:
+        st.error(f"Error validating content: {str(e)}")
+        return True, None  # Continue with original response if validation fails
+
+def validate_wiki_content(text, title, key_terms=None):
+    """Validate that the Wikipedia content is relevant to the query using AI."""
+    try:
+        # Build validation prompt
+        validation_prompt = f"""Analyze if this Wikipedia content is relevant to the search terms.
+
+Search Terms: {', '.join(key_terms) if key_terms else 'None provided'}
+Article Title: {title}
+
+Content to validate:
+{text[:1000]}
+
+Requirements:
+1. Check if the content directly relates to the search terms
+2. Verify if the content provides historical context
+3. Ensure the content is not about unrelated scientific/technical topics
+4. If dates/years are mentioned, confirm they match the search context
+
+Respond with ONLY 'true' if the content is relevant and meets all requirements, or 'false' if it should be excluded."""
+
+        # Get model choice from session state
+        model_choice = st.session_state.get('model_choice', "Groq (Free)")
+        
+        # Get validation response
+        if model_choice == "Deepseek (Requires API Key)":
+            api_key = st.session_state.get('DEEPSEEK_API_KEY')
+            if not api_key:
                 return False
-        
-        # Calculate relevance scores
-        term_matches = sum(term.lower() in text.lower() for term in key_terms)
-        entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
-        
-        # Check for historical context words
-        historical_terms = {'history', 'historical', 'event', 'period', 'era', 'century', 'decade', 'war', 'revolution', 'movement', 'reign', 'rule', 'dynasty', 'empire', 'kingdom', 'government', 'politics', 'society', 'culture', 'economy'}
-        historical_context = sum(1 for term in historical_terms if term in text.lower())
-        
-        # Content must meet ANY of these criteria:
-        # 1. Have key term matches
-        # 2. Have entity overlap
-        # 3. Have historical context if it's not a primary source
-        # 4. If it contains a year that matches our query
-        
-        # Check for scientific/astronomical terms that might indicate irrelevant content
-        scientific_terms = {'galaxy', 'cluster', 'constellation', 'star', 'planet', 'physics', 'quantum', 'chemical', 'molecule'}
-        has_scientific_terms = any(term in text.lower() for term in scientific_terms)
-        
-        # Calculate final relevance - more lenient criteria
-        is_relevant = (
-            (term_matches > 0 or  # Has any term matches
-            entity_overlap > 0 or  # Has any entity overlap
-            historical_context > 0) and  # Has any historical context
-            not has_scientific_terms and  # Must not be scientific/astronomical
-            (not title_year_match or year_relevance)  # If it has a year, it must be relevant
-        )
+                
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': [
+                        {
+                            'role': 'system',
+                            'content': 'You are a strict content validator. Respond only with "true" or "false".'
+                        },
+                        {
+                            'role': 'user',
+                            'content': validation_prompt
+                        }
+                    ]
+                }
+            )
+            is_relevant = response.json()['choices'][0]['message']['content'].strip().lower() == 'true'
+            
+        else:
+            api_key = st.session_state.get('GROQ_API_KEY')
+            if not api_key:
+                return False
+                
+            client = Groq(api_key=api_key)
+            
+            completion = client.chat.completions.create(
+                model="mixtral-8x7b-32768",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a strict content validator. Respond only with 'true' or 'false'."
+                    },
+                    {
+                        "role": "user",
+                        "content": validation_prompt
+                    }
+                ],
+                temperature=0.1,  # Low temperature for more consistent validation
+                max_tokens=10,
+                top_p=1
+            )
+            
+            is_relevant = completion.choices[0].message.content.strip().lower() == 'true'
         
         return is_relevant
         
     except Exception as e:
         st.error(f"Error validating content: {str(e)}")
-        return True  # Accept content if validation fails
+        return False  # Reject content if validation fails
 
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
