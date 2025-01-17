@@ -85,6 +85,26 @@ def create_new_conversation():
     st.session_state.suggestions = []
     st.session_state.current_conversation_id = None
 
+def delete_conversation(conv_id):
+    """Delete a specific conversation."""
+    if not st.session_state.user_id:
+        return False
+    db = get_db_session()
+    try:
+        conv = db.query(Conversation).get(conv_id)
+        if conv and conv.user_id == st.session_state.user_id:
+            # If we're deleting the current conversation, clear the state
+            if st.session_state.current_conversation_id == conv_id:
+                st.session_state.messages = []
+                st.session_state.suggestions = []
+                st.session_state.current_conversation_id = None
+            db.delete(conv)
+            db.commit()
+            return True
+        return False
+    finally:
+        db.close()
+
 def save_conversation():
     """Save current conversation to database."""
     if st.session_state.user_id and st.session_state.messages:
@@ -167,26 +187,6 @@ def logout_user():
         del st.session_state['DEEPSEEK_API_KEY']
     if 'GROQ_API_KEY' in st.session_state:
         del st.session_state['GROQ_API_KEY']
-
-def delete_conversation(conv_id):
-    """Delete a specific conversation."""
-    if not st.session_state.user_id:
-        return False
-    db = get_db_session()
-    try:
-        conv = db.query(Conversation).get(conv_id)
-        if conv and conv.user_id == st.session_state.user_id:
-            # If we're deleting the current conversation, clear the state
-            if st.session_state.current_conversation_id == conv_id:
-                st.session_state.messages = []
-                st.session_state.suggestions = []
-                st.session_state.current_conversation_id = None
-            db.delete(conv)
-            db.commit()
-            return True
-        return False
-    finally:
-        db.close()
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -569,9 +569,6 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = re.sub(r'https?://\S+', '', main_response)
             main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
             
-            # Process importance markers
-            main_response = process_importance_markers(main_response)
-            
             # Clean up extra spaces and normalize whitespace
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
@@ -658,9 +655,6 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
-        # Process importance markers
-        main_response = process_importance_markers(main_response)
-        
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
@@ -680,10 +674,15 @@ def get_ai_response(prompt, wiki_content):
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
+        # Get raw response from selected model
         if model_choice == "Deepseek (Requires API Key)":
-            return get_deepseek_response(prompt, wiki_content)
+            response = get_deepseek_response(prompt, wiki_content)
         else:
-            return get_groq_response(prompt, wiki_content)
+            response = get_groq_response(prompt, wiki_content)
+        
+        # Process the response with importance markers
+        processed_response = process_importance_markers(response)
+        return processed_response
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
