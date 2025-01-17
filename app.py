@@ -368,55 +368,84 @@ def get_wikipedia_content(query):
         seen_content = set()
         found_articles = {}  # Track which articles contributed what content
         
+        def process_article(title, depth=0, max_depth=1):
+            """Process an article and its related links up to max_depth."""
+            if depth > max_depth or title in found_articles:
+                return
+                
+            try:
+                page = wiki.page(title)
+                if not page.exists():
+                    return
+                    
+                # Get summary and check relevance
+                summary = page.summary
+                
+                # Check if the summary contains any of our key terms
+                if not any(term.lower() in summary.lower() for term in key_terms):
+                    return
+                    
+                # Track what content we're using from this article
+                found_articles[title] = {
+                    'summary': summary[:1000],  # First 1000 chars of summary
+                    'used_sections': [],
+                    'relevance': 'primary' if depth == 0 else 'related'
+                }
+                
+                # Add summary if unique
+                if summary not in seen_content:
+                    seen_content.add(summary)
+                    wiki_content.append(f"From article '{title}':\n{summary[:1000]}")
+                    
+                # Look for relevant sections
+                sections = page.sections
+                if sections:
+                    relevant_sections = []
+                    for section in sections:
+                        section_text = page.section_by_title(section)
+                        if len(section_text) > 100 and any(term.lower() in section_text.lower() for term in key_terms):
+                            relevant_sections.append((section, section_text))
+                    
+                    # Sort sections by relevance (number of key term matches)
+                    relevant_sections.sort(key=lambda x: sum(term.lower() in x[1].lower() for term in key_terms), reverse=True)
+                    
+                    # Take top 3 most relevant sections
+                    for section, section_text in relevant_sections[:3]:
+                        section_summary = section_text[:500]
+                        if section_summary not in seen_content:
+                            seen_content.add(section_summary)
+                            wiki_content.append(f"Additional context from section '{section}':\n{section_summary}")
+                            found_articles[title]['used_sections'].append({
+                                'name': section,
+                                'content': section_summary
+                            })
+                
+                # If this is the primary article, follow links to related articles
+                if depth == 0:
+                    # Get links from the page
+                    links = page.links
+                    # Sort links by relevance to our key terms
+                    relevant_links = []
+                    for link in links:
+                        relevance_score = sum(term.lower() in link.lower() for term in key_terms)
+                        if relevance_score > 0:
+                            relevant_links.append((link, relevance_score))
+                    
+                    # Sort by relevance score and process top 3 related articles
+                    relevant_links.sort(key=lambda x: x[1], reverse=True)
+                    for link, _ in relevant_links[:3]:
+                        process_article(link, depth + 1, max_depth)
+                        
+            except Exception as e:
+                return
+        
+        # Process main search results
         for term in search_terms:
             try:
-                # Search for articles
                 search_results = wikipedia.search(term, results=3)
-                
                 for title in search_results:
-                    if title in found_articles:
-                        continue
-                        
-                    try:
-                        page = wiki.page(title)
-                        if not page.exists():
-                            continue
-                            
-                        # Get summary and check relevance
-                        summary = page.summary
-                        
-                        # Check if the summary contains any of our key terms
-                        if not any(term.lower() in summary.lower() for term in key_terms):
-                            continue
-                            
-                        # Track what content we're using from this article
-                        found_articles[title] = {
-                            'summary': summary[:1000],  # First 1000 chars of summary
-                            'used_sections': []
-                        }
-                        
-                        # Add summary if unique
-                        if summary not in seen_content:
-                            seen_content.add(summary)
-                            wiki_content.append(f"From article '{title}':\n{summary[:1000]}")
-                            
-                        # Look for relevant sections
-                        sections = page.sections
-                        if sections:
-                            for section in sections[:3]:  # Look at first 3 sections
-                                section_text = page.section_by_title(section)
-                                if len(section_text) > 100 and any(term.lower() in section_text.lower() for term in key_terms):
-                                    section_summary = section_text[:500]
-                                    if section_summary not in seen_content:
-                                        seen_content.add(section_summary)
-                                        wiki_content.append(f"Additional context from section '{section}':\n{section_summary}")
-                                        found_articles[title]['used_sections'].append({
-                                            'name': section,
-                                            'content': section_summary
-                                        })
-                    except Exception as e:
-                        continue
-                        
+                    process_article(title)
+                    
                 if found_articles:  # If we found relevant articles, no need to keep searching
                     break
                     
