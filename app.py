@@ -24,7 +24,7 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 st.markdown("""
 <style>
     /* Link styling */
-    div.stChatMessage div.stMarkdown a {
+    .element-container.st-emotion-cache-* div.stMarkdown a {
         color: inherit !important;
         text-decoration: none !important;
         cursor: pointer;
@@ -32,27 +32,29 @@ st.markdown("""
     }
     
     /* Importance-based text styling */
-    div.stChatMessage div.stMarkdown a[data-importance="important"] {
+    .element-container.st-emotion-cache-* div.stMarkdown a[data-importance="important"] {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    div.stChatMessage div.stMarkdown a[data-importance="secondary"] {
+    .element-container.st-emotion-cache-* div.stMarkdown a[data-importance="secondary"] {
         color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    div.stChatMessage div.stMarkdown a[data-importance="tertiary"] {
+    .element-container.st-emotion-cache-* div.stMarkdown a[data-importance="tertiary"] {
         color: rgba(255, 255, 255, 0.75) !important;
     }
     
     /* Subtle hover effect for links */
-    div.stChatMessage div.stMarkdown a:hover {
+    .element-container.st-emotion-cache-* div.stMarkdown a:hover {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
+        padding: 2px 4px;
+        margin: -2px -4px;
     }
     
     /* Chat message styling */
-    div.stChatMessage {
+    .element-container.st-emotion-cache-* {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
@@ -61,13 +63,13 @@ st.markdown("""
         transition: all 0.2s ease-in-out;
     }
     
-    div.stChatMessage:hover {
+    .element-container.st-emotion-cache-*:hover {
         background: rgba(255, 255, 255, 0.07);
         border-color: rgba(255, 255, 255, 0.15);
     }
     
     /* Base text style */
-    div.stChatMessage div.stMarkdown {
+    .element-container.st-emotion-cache-* div.stMarkdown {
         color: rgba(250, 250, 250, 0.6) !important;
         line-height: 1.6;
         max-width: 100% !important;
