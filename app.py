@@ -490,6 +490,32 @@ def get_wikipedia_content(query):
         st.error(f"Error searching Wikipedia: {str(e)}")
         return None
 
+def get_ai_response(prompt, wiki_content):
+    """Get response from selected AI model with follow-up suggestions."""
+    try:
+        # Get model choice from session state
+        model_choice = st.session_state.get('model_choice', "Groq (Free)")
+        
+        if model_choice == "Deepseek (Requires API Key)":
+            response = get_deepseek_response(prompt, wiki_content)
+        else:
+            response = get_groq_response(prompt, wiki_content)
+            
+        # Extract suggestions after getting formatted response
+        suggestions = extract_suggestions(response)
+        st.session_state.suggestions = suggestions
+        
+        return response
+    except Exception as e:
+        return f"Error communicating with AI model: {str(e)}"
+
+def extract_suggestions(response_text):
+    """Extract suggestions from a formatted response."""
+    # Remove HTML wrapper if present
+    response_text = re.sub(r'<div>(.*?)</div>', r'\1', response_text)
+    parts = response_text.split('[SUGGESTION]')
+    return [s.strip() for s in parts[1:] if s.strip()]
+
 def get_deepseek_response(prompt, wiki_content):
     """Get response from Deepseek API with follow-up suggestions."""
     try:
@@ -548,10 +574,6 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             # Split response and suggestions
             parts = response_text.split('[SUGGESTION]')
             main_response = parts[0].strip()
-            suggestions = [s.strip() for s in parts[1:] if s.strip()]
-            
-            # Store suggestions in session state
-            st.session_state.suggestions = suggestions
             
             # Clean up formatting artifacts
             main_response = re.sub(r'PART \d:', '', main_response)
@@ -576,7 +598,13 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
             
-            return f'<div>{main_response}</div>'
+            # Combine main response with suggestions
+            full_response = main_response
+            for suggestion in parts[1:]:
+                if suggestion.strip():
+                    full_response += f"\n[SUGGESTION]{suggestion.strip()}"
+            
+            return f'<div>{full_response}</div>'
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
@@ -641,10 +669,6 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         # Split response and suggestions
         parts = response_text.split('[SUGGESTION]')
         main_response = parts[0].strip()
-        suggestions = [s.strip() for s in parts[1:] if s.strip()]
-        
-        # Store suggestions in session state
-        st.session_state.suggestions = suggestions
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -669,22 +693,15 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
-        return f'<div>{main_response}</div>'
+        # Combine main response with suggestions
+        full_response = main_response
+        for suggestion in parts[1:]:
+            if suggestion.strip():
+                full_response += f"\n[SUGGESTION]{suggestion.strip()}"
+        
+        return f'<div>{full_response}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
-
-def get_ai_response(prompt, wiki_content):
-    """Get response from selected AI model with follow-up suggestions."""
-    try:
-        # Get model choice from session state
-        model_choice = st.session_state.get('model_choice', "Groq (Free)")
-        
-        if model_choice == "Deepseek (Requires API Key)":
-            return get_deepseek_response(prompt, wiki_content)
-        else:
-            return get_groq_response(prompt, wiki_content)
-    except Exception as e:
-        return f"Error communicating with AI model: {str(e)}"
 
 # Main content area
 st.markdown('<h1>Historical Chat Bot</h1>', unsafe_allow_html=True)
