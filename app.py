@@ -416,8 +416,13 @@ def get_wikipedia_content(query):
                 last_progress_update = current_time
             
             try:
-                # Get initial search results
-                search_results = wikipedia.search(term, results=20)
+                # Get initial search results using wikipedia library
+                try:
+                    search_results = wikipedia.search(term, results=20)
+                except Exception as wiki_error:
+                    st.error(f"Wikipedia search error: {str(wiki_error)}")
+                    continue
+                
                 term_start_time = time.time()
                 
                 # Process each potential article
@@ -432,8 +437,16 @@ def get_wikipedia_content(query):
                         continue
                         
                     try:
-                        page = wiki.page(title)
-                        if not page.exists():
+                        # Try to get the page using wikipedia library
+                        try:
+                            page = wikipedia.page(title, auto_suggest=False)
+                        except wikipedia.exceptions.DisambiguationError as e:
+                            # Try the first option from disambiguation
+                            try:
+                                page = wikipedia.page(e.options[0], auto_suggest=False)
+                            except:
+                                continue
+                        except Exception as e:
                             continue
                             
                         # Get full content for validation
