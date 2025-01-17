@@ -886,6 +886,8 @@ for idx, message in enumerate(st.session_state.messages):
                     else:
                         response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
                     st.session_state.messages.append({"role": "assistant", "content": response})
+                    # Extract suggestions from the new response
+                    st.session_state.suggestions = extract_suggestions(response)
                     save_conversation()  # Save after AI response
                     st.rerun()
 
@@ -907,5 +909,7 @@ if prompt := st.chat_input("What would you like to know about history?"):
         response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
+    # Extract suggestions from the new response
+    st.session_state.suggestions = extract_suggestions(response)
     save_conversation()  # Save after each message
     st.rerun() 
