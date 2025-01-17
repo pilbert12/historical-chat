@@ -228,7 +228,7 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 1rem;
+        padding: 1.5rem;
         margin: 1rem 0;
         transition: all 0.2s ease-in-out;
     }
@@ -247,8 +247,9 @@ st.markdown("""
     
     /* Base text style */
     .stChatMessage div.stMarkdown {
-        color: rgba(250, 250, 250, 0.6) !important;
-        line-height: 1.6;
+        color: rgba(250, 250, 250, 0.7) !important;
+        line-height: 1.7;
+        font-size: 1rem;
         max-width: 100% !important;
     }
     
@@ -261,32 +262,19 @@ st.markdown("""
         max-width: 100% !important;
     }
 
-    /* Link styling */
-    .stChatMessage div.stMarkdown a {
-        color: inherit !important;
-        text-decoration: none !important;
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
-    }
-
     /* Importance-based text styling */
-    .stChatMessage div.stMarkdown a[data-importance="primary"] {
+    .primary-term {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .stChatMessage div.stMarkdown a[data-importance="secondary"] {
+    .secondary-term {
         color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    .stChatMessage div.stMarkdown a[data-importance="tertiary"] {
+    .tertiary-term {
         color: rgba(255, 255, 255, 0.75) !important;
-    }
-
-    /* Subtle hover effect for links */
-    .stChatMessage div.stMarkdown a:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
+        font-style: italic;
     }
     
     /* Style the buttons container */
@@ -303,16 +291,33 @@ st.markdown("""
         color: rgba(255, 255, 255, 0.75);
         transition: all 0.2s ease-in-out;
         min-height: unset;
-        padding: 0.5rem 1rem;
+        padding: 0.75rem 1.25rem;
         width: auto !important;
         flex: 1;
         border-radius: 8px;
+        font-size: 0.95rem;
     }
     
     div[data-testid="column"] button:hover {
         background: rgba(255, 255, 255, 0.1);
         color: rgba(255, 255, 255, 0.9);
         border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Follow-up questions section */
+    .follow-up-questions {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .follow-up-questions h4 {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.9rem;
+        font-weight: 400;
+        margin-bottom: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     /* Play button styling */
@@ -353,17 +358,6 @@ st.markdown("""
         position: relative !important;
     }
 </style>
-
-<script>
-function askFollowUp(question) {
-    const input = document.querySelector('[data-testid="stChatInput"] input');
-    const button = document.querySelector('[data-testid="stChatInput"] button');
-    if (input && button) {
-        input.value = question;
-        button.click();
-    }
-}
-</script>
 """, unsafe_allow_html=True)
 
 # Load environment variables
@@ -660,14 +654,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
-        # Process importance markers in main response
-        for level in range(1, 4):
-            main_response = re.sub(
-                f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: create_wiki_link(m.group(1), 
-                    'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                main_response
-            )
+        # Process importance markers
+        main_response = process_importance_markers(main_response)
         
         # Clean up extra spaces and normalize whitespace
         main_response = re.sub(r'\s+', ' ', main_response)
@@ -678,7 +666,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             st.session_state.suggestions = []
         st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
         
-        return f'<div>{main_response}</div>'
+        return main_response
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
@@ -924,3 +912,15 @@ if prompt := st.chat_input("What would you like to know about history?"):
     st.session_state.messages.append({"role": "assistant", "content": response})
     save_conversation()  # Save after each message
     st.rerun() 
+
+def process_importance_markers(text):
+    """Process text and add visual hierarchy through styling."""
+    # Clean up any existing formatting
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Process importance markers
+    text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
+    text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
+    text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
+    
+    return f'<div>{text}</div>' 
