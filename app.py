@@ -10,6 +10,7 @@ from gtts import gTTS
 import base64
 import io
 from groq import Groq
+import time
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -359,7 +360,11 @@ def add_wiki_links(text):
 def get_wikipedia_content(query):
     """Search Wikipedia and get content for the query."""
     try:
+        # Create a placeholder for showing search progress
+        search_progress = st.empty()
+        
         # Clean up query and extract key terms
+        search_progress.markdown("🔍 Analyzing query and extracting key terms...")
         doc = nlp(query)
         
         # Extract dates and years
@@ -372,9 +377,26 @@ def get_wikipedia_content(query):
         
         # Build search terms with historical context
         key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
+        search_progress.markdown("📚 Building search strategy...")
+        
+        # Generate broader search terms
+        search_terms = []
+        
+        # Economic/industry specific terms for better context
+        industry_terms = [
+            "economic history",
+            "industrial history",
+            "industry statistics",
+            "economic statistics",
+            "industrial production",
+            "economic growth",
+            "major industries",
+            "industrial development",
+            "economic sectors",
+            "business history"
+        ]
         
         # If we have a year, prioritize searches with that year
-        search_terms = []
         if years:
             for year in years:
                 # Add year-specific search terms
@@ -382,17 +404,25 @@ def get_wikipedia_content(query):
                     f"{year} in history",
                     f"historical events {year}",
                     f"{year} history",
+                    f"economy in {year}",
+                    f"industrial history {year}",
+                    f"economic conditions {year}",
                 ])
                 # Combine year with other key terms
                 for term in key_terms:
+                    search_terms.append(f"{term} {year}")
+                # Add industry-specific year combinations
+                for term in industry_terms:
                     search_terms.append(f"{term} {year}")
         
         # Add general historical search terms
         search_terms.extend([
             query + " historical event",
             query + " in history",
+            query + " economic history",
+            query + " industrial history",
             query
-        ] + key_terms)
+        ] + key_terms + industry_terms)
         
         # Remove duplicates while preserving order
         search_terms = list(dict.fromkeys(search_terms))
@@ -400,70 +430,18 @@ def get_wikipedia_content(query):
         wiki_content = []
         seen_content = set()
         found_articles = {}  # Track which articles contributed what content
+        processed_count = 0
         
-        def validate_wiki_content(text, title):
-            """Validate that the Wikipedia content is relevant to the query."""
-            try:
-                # Extract key terms from the content
-                doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
-                content_entities = set([ent.text.lower() for ent in doc.ents])
-                
-                # Extract dates and years
-                years = set()
-                for ent in doc.ents:
-                    if ent.label_ == 'DATE':
-                        # Try to extract year from date entity
-                        year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
-                        if year_match:
-                            years.add(year_match.group(0))
-                
-                # If the title contains a year, it must be relevant to our key terms
-                title_year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', title)
-                if title_year_match:
-                    title_year = title_year_match.group(0)
-                    # Check if this year is relevant to our query
-                    year_relevance = any(term.lower() in text.lower() for term in key_terms)
-                    if not year_relevance:
-                        return False
-                
-                # Calculate relevance scores
-                term_matches = sum(term.lower() in text.lower() for term in key_terms)
-                entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
-                
-                # Check for historical context words
-                historical_terms = {'history', 'historical', 'event', 'period', 'era', 'century', 'decade', 'war', 'revolution', 'movement'}
-                historical_context = sum(1 for term in historical_terms if term in text.lower())
-                
-                # Content must meet ALL of these criteria:
-                # 1. Have multiple key term matches OR strong entity overlap
-                # 2. Have historical context if it's not a primary source
-                # 3. Not be about astronomy, physics, or other unrelated scientific topics
-                # 4. If it contains a year, that year must be relevant to the query
-                
-                # Check for scientific/astronomical terms that might indicate irrelevant content
-                scientific_terms = {'galaxy', 'cluster', 'constellation', 'star', 'planet', 'physics', 'quantum', 'chemical', 'molecule'}
-                has_scientific_terms = any(term in text.lower() for term in scientific_terms)
-                
-                # Calculate final relevance
-                is_relevant = (
-                    (term_matches > 1 or (term_matches > 0 and entity_overlap > 0)) and  # Must have good term matching
-                    (historical_context > 0 or 'primary' in str(data.get('relevance', ''))) and  # Must have historical context
-                    not has_scientific_terms and  # Must not be scientific/astronomical
-                    (not title_year_match or year_relevance)  # If it has a year, it must be relevant
-                )
-                
-                return is_relevant
-                
-            except Exception as e:
-                st.error(f"Error validating content: {str(e)}")
-                return False  # Reject content if validation fails
-        
-        def process_article(title, depth=0, max_depth=2):
+        def process_article(title, depth=0, max_depth=3):  # Increased depth to 3
             """Process an article and its related links up to max_depth."""
+            nonlocal processed_count
             if depth > max_depth or title in found_articles:
                 return
-                
+            
             try:
+                processed_count += 1
+                search_progress.markdown(f"🔍 Searching... (Articles processed: {processed_count})\n\nCurrently analyzing: {title}")
+                
                 page = wiki.page(title)
                 if not page.exists():
                     return
@@ -477,7 +455,7 @@ def get_wikipedia_content(query):
                     
                 # Track what content we're using from this article
                 found_articles[title] = {
-                    'summary': summary[:1000],  # First 1000 chars of summary
+                    'summary': summary[:1000],
                     'used_sections': [],
                     'relevance': 'primary' if depth == 0 else 'related'
                 }
@@ -496,7 +474,7 @@ def get_wikipedia_content(query):
                         if len(section_text) > 100 and validate_wiki_content(section_text, title):
                             relevant_sections.append((section, section_text))
                     
-                    # Sort sections by relevance (number of key term matches)
+                    # Sort sections by relevance
                     relevant_sections.sort(key=lambda x: sum(term.lower() in x[1].lower() for term in key_terms), reverse=True)
                     
                     # Take top 5 most relevant sections
@@ -521,9 +499,9 @@ def get_wikipedia_content(query):
                         if relevance_score > 0:
                             relevant_links.append((link, relevance_score))
                     
-                    # Sort by relevance score and process top 5 related articles
+                    # Sort by relevance score and process top 8 related articles
                     relevant_links.sort(key=lambda x: x[1], reverse=True)
-                    for link, _ in relevant_links[:5]:
+                    for link, _ in relevant_links[:8]:  # Increased from 5 to 8
                         process_article(link, depth + 1, max_depth)
                         
             except Exception as e:
@@ -532,16 +510,21 @@ def get_wikipedia_content(query):
         # Process main search results
         for term in search_terms:
             try:
-                # Increased from 3 to 5 initial search results
-                search_results = wikipedia.search(term, results=5)
+                search_progress.markdown(f"🔍 Searching for: {term}")
+                # Increased from 5 to 8 initial search results
+                search_results = wikipedia.search(term, results=8)
                 for title in search_results:
                     process_article(title)
                     
-                if len(found_articles) >= 5:  # Only stop if we have at least 5 relevant articles
+                if len(found_articles) >= 20:  # Increased minimum articles to 20
                     break
                     
             except Exception as e:
                 continue
+        
+        search_progress.markdown(f"✅ Search complete! Found {len(found_articles)} relevant articles.")
+        time.sleep(2)  # Show completion message briefly
+        search_progress.empty()  # Clear the progress display
         
         if wiki_content:
             # Store found articles in session state for reference
