@@ -757,7 +757,7 @@ for idx, message in enumerate(st.session_state.messages):
             
             with cols[2]:
                 if idx == len(st.session_state.messages) - 1:  # Only for latest message
-                    if st.button("🎲", key=f"shuffle_{idx}", help="Generate new suggestions"):
+                    if st.button("🎲", key=f"shuffle_{idx}", help="Generate new response and suggestions"):
                         # Get the last user message for context
                         last_user_msg = None
                         for msg in reversed(st.session_state.messages[:-1]):  # Exclude current message
