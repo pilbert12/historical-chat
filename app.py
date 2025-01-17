@@ -533,13 +533,15 @@ def get_wikipedia_content(query):
                     relevant_snippets.append(title)
 
         # Show search completion message
-        if len(wiki_content) > 0:
+        content_count = len([c for c, s in wiki_content if s > 0])  # Count content pieces with positive relevance
+        if content_count > 0:
             search_progress.markdown(f"""ℹ️ Search complete
-Found content from {len(wiki_content)} sources""")
+Found relevant content from {content_count} sources""")
+            time.sleep(2)
         else:
-            search_progress.markdown("ℹ️ No relevant content found")
+            search_progress.markdown("ℹ️ Continuing search with broader terms...")
+            time.sleep(1)
         
-        time.sleep(2)  # Show completion message briefly
         search_progress.empty()  # Clear the progress display
 
         # Reset suggestions at the start of each new response
