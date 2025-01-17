@@ -14,29 +14,249 @@ import time
 import urllib.parse
 import random
 
-# Load spaCy model
-nlp = spacy.load('en_core_web_sm')
-
-# Set page config
-st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
-
-# Add custom CSS
+# Add custom CSS for layout and styling
 st.markdown("""
 <style>
+    /* Header styling */
+    .stApp > header {
+        background-color: transparent;
+    }
+    
+    /* Title container */
+    h1:first-of-type {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 300;
+        letter-spacing: -0.5px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 2.8rem !important;
+        margin-bottom: 0.2rem;
+        line-height: 1.2;
+    }
+    
+    /* Subtitle styling */
+    .stApp > div:first-child > div:nth-child(2) p {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        margin-bottom: 3rem;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 0.2px;
+    }
+
+    /* Chat message icons */
+    .stChatMessage [data-testid="stChatMessageAvatar"] {
+        background: transparent !important;
+        padding: 0.5rem;
+    }
+
+    /* User icon */
+    .stChatMessage.user [data-testid="stChatMessageAvatar"] {
+        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%) !important;
+        border-radius: 12px;
+    }
+
+    /* Assistant icon */
+    .stChatMessage.assistant [data-testid="stChatMessageAvatar"] {
+        background: linear-gradient(135deg, #FFB86C 0%, #FFD93D 100%) !important;
+        border-radius: 12px;
+    }
+
+    /* Chat message container */
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 1rem;
+        margin: 1rem 0;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .stChatMessage:hover {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Main content width */
+    .stApp > div:first-child {
+        max-width: 1200px !important;
+        padding-left: 5rem;
+        padding-right: 5rem;
+    }
+    
+    /* Base text style */
+    .stChatMessage div.stMarkdown {
+        color: rgba(250, 250, 250, 0.6) !important;
+        line-height: 1.6;
+        max-width: 100% !important;
+    }
+    
+    /* Make chat messages wider */
+    .stChatMessage {
+        max-width: 100% !important;
+    }
+    
+    .stChatMessage > div {
+        max-width: 100% !important;
+    }
+
+    /* Link styling */
+    .stChatMessage div.stMarkdown a {
+        color: inherit !important;
+        text-decoration: none !important;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+    }
+
     /* Importance-based text styling */
-    .stMarkdown span[data-importance="important"] {
+    .stChatMessage div.stMarkdown a[data-importance="primary"] {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .stMarkdown span[data-importance="secondary"] {
-        color: rgba(255, 255, 255, 0.75) !important;
+    .stChatMessage div.stMarkdown a[data-importance="secondary"] {
+        color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    .stMarkdown span[data-importance="tertiary"] {
-        color: rgba(255, 255, 255, 0.55) !important;
+    .stChatMessage div.stMarkdown a[data-importance="tertiary"] {
+        color: rgba(255, 255, 255, 0.75) !important;
+    }
+
+    /* Subtle hover effect for links */
+    .stChatMessage div.stMarkdown a:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+    
+    /* Style the buttons container */
+    div[data-testid="column"] > div {
+        display: flex;
+        justify-content: center;
+        margin-top: 1.5rem;
+    }
+    
+    /* Style the buttons */
+    div[data-testid="column"] button {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.75);
+        transition: all 0.2s ease-in-out;
+        min-height: unset;
+        padding: 0.5rem 1rem;
+        width: auto !important;
+        flex: 1;
+        border-radius: 8px;
+    }
+    
+    div[data-testid="column"] button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.9);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Play button styling */
+    .play-button-container {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        z-index: 100;
+    }
+    
+    .play-button {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        padding: 0;
+    }
+    
+    .play-button:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .play-button svg {
+        width: 16px;
+        height: 16px;
+        fill: rgba(255, 255, 255, 0.8);
+    }
+    
+    /* Make chat messages have relative positioning for play button */
+    .stChatMessage {
+        position: relative !important;
+    }
+    
+    /* Styling for the collapsible sources section */
+    details {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    details summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+    }
+    
+    details summary::-webkit-details-marker {
+        display: none;
+    }
+    
+    details summary::before {
+        content: "▶";
+        margin-right: 0.5rem;
+        transition: transform 0.2s ease-in-out;
+        font-size: 0.8em;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    
+    details[open] summary::before {
+        transform: rotate(90deg);
+    }
+    
+    details summary:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    /* Scrollbar styling for sources content */
+    details > div {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+    }
+    
+    details > div::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    details > div::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+    }
+    
+    details > div::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+    }
+    
+    details > div::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
     }
 </style>
+
+<script>
+function askFollowUp(question) {
+    const input = document.querySelector('[data-testid="stChatInput"] input');
+    const button = document.querySelector('[data-testid="stChatInput"] button');
+    if (input && button) {
+        input.value = question;
+        button.click();
+    }
+}
+</script>
 """, unsafe_allow_html=True)
 
 # Load environment variables
@@ -59,42 +279,73 @@ def load_spacy_model():
 
 nlp = load_spacy_model()
 
-def create_importance_span(text, importance):
-    """Create a span with proper styling based on importance."""
+def create_wiki_link(text, importance):
+    """Create a Wikipedia search link with proper formatting."""
+    # Clean up the text and create a proper search URL
     clean_text = text.strip()
-    return f'<span data-importance="{importance}">{clean_text}</span>'
+    search_url = f"https://en.wikipedia.org/wiki/Special:Search/{urllib.parse.quote(clean_text)}"
+    
+    # Return properly formatted HTML with data-importance attribute
+    return f'<a href="{search_url}" class="wiki-link" data-importance="{importance}">{clean_text}</a>'
 
-def add_importance_styling(text):
-    """Process text and add importance-based styling."""
-    # Clean up any existing formatting
-    text = re.sub(r'<[^>]+>', '', text)
+def add_wiki_links(text):
+    """Process text and add Wikipedia links with importance-based styling."""
+    # Clean up any existing URLs or markdown links
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Process importance markers with non-greedy matching and proper boundary handling
-    text = re.sub(r'\[1\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_importance_span(m.group(1), 'important'), text)
-    text = re.sub(r'\[2\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_importance_span(m.group(1), 'secondary'), text)
-    text = re.sub(r'\[3\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_importance_span(m.group(1), 'tertiary'), text)
+    # Split text into sentences
+    sentences = text.split('. ')
+    result = []
     
-    # Clean up any remaining markers and whitespace
-    text = re.sub(r'\[\d+\]', '', text)
-    text = re.sub(r'\s+', ' ', text)
+    for sentence in sentences:
+        if not sentence.strip():
+            continue
+        
+        words = sentence.split()
+        i = 0
+        phrase_result = []
+        
+        while i < len(words):
+            # Try 3-word phrases (highest importance)
+            if i + 2 < len(words):
+                phrase = ' '.join(words[i:i+3])
+                if (len(phrase) > 5 and 
+                    not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but']) and
+                    any(word[0].isupper() for word in words[i:i+3])):
+                    phrase_result.append(create_wiki_link(phrase, 'important'))
+                    i += 3
+                    continue
+            
+            # Try 2-word phrases (secondary importance)
+            if i + 1 < len(words):
+                phrase = ' '.join(words[i:i+2])
+                if (len(phrase) > 5 and 
+                    not any(word.lower() in phrase.lower() for word in ['the', 'and', 'or', 'but']) and
+                    any(word[0].isupper() for word in words[i:i+2])):
+                    phrase_result.append(create_wiki_link(phrase, 'secondary'))
+                    i += 2
+                    continue
+            
+            # Single words
+            if words[i][0].isupper() and len(words[i]) > 2:
+                phrase_result.append(create_wiki_link(words[i], 'important' if i == 0 else 'secondary'))
+            else:
+                phrase_result.append(words[i])
+            i += 1
+        
+        result.append(' '.join(phrase_result))
     
-    return f'<div class="wiki-content">{text}</div>'
+    final_text = '. '.join(result).strip()
+    return f'<div>{final_text}</div>'
 
 def validate_wiki_content(text, title):
     """Validate that the Wikipedia content is relevant to the query."""
     try:
-        # Skip literary/fictional/media content
-        irrelevant_terms = {
-            'novel', 'fiction', 'literary', 'literature', 'story', 'stories', 
-            'author', 'writer', 'poem', 'poetry', 'television', 'tv', 'series',
-            'episode', 'show', 'movie', 'film', 'anime', 'manga', 'comic'
-        }
-        
-        # Check title and first paragraph for irrelevant terms
-        if any(term in title.lower() for term in irrelevant_terms):
-            return False
-        if any(term in text.lower()[:500] for term in irrelevant_terms):
+        # Skip literary/fictional content
+        literary_terms = {'novel', 'fiction', 'literary', 'literature', 'story', 'stories', 'author', 'writer', 'poem', 'poetry'}
+        if any(term in title.lower() for term in literary_terms) or any(term in text.lower()[:200] for term in literary_terms):
             return False
             
         # Extract key terms from the content
@@ -106,23 +357,11 @@ def validate_wiki_content(text, title):
         entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
         
         # Check for historical indicators
-        historical_terms = {
-            'history', 'century', 'ancient', 'period', 'era', 'historical',
-            'empire', 'kingdom', 'dynasty', 'ruler', 'reign', 'conquest',
-            'civilization', 'culture', 'society', 'development'
-        }
+        historical_terms = {'history', 'century', 'ancient', 'period', 'era', 'historical', 'invention', 'development', 'discovery'}
+        has_historical_context = any(term in text.lower() for term in historical_terms)
         
-        # Require stronger historical context
-        historical_context_score = sum(1 for term in historical_terms if term in text.lower())
-        
-        # Article must have:
-        # 1. Multiple term matches or entity overlaps
-        # 2. Strong historical context
-        # 3. No irrelevant terms
-        is_relevant = (
-            (term_matches >= 2 or entity_overlap >= 2) and
-            historical_context_score >= 2
-        )
+        # Require both term matches and historical context
+        is_relevant = (term_matches > 0 or entity_overlap > 0) and has_historical_context
         
         return is_relevant
         
@@ -250,22 +489,152 @@ Found content from {total_content_found} sources""")
         st.error(f"Error searching Wikipedia: {str(e)}")
         return None
 
-def process_suggestions(response_text):
-    """Extract and clean up suggestions from the response text."""
-    suggestions = []
-    lines = response_text.split('\n')
-    
-    for line in lines:
-        if '[SUGGESTION]' in line:
-            # Clean up the suggestion text
-            suggestion = line[line.find('[SUGGESTION]') + 12:].strip()
-            # Remove any importance markers
-            suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
-            suggestion = re.sub(r'\s+', ' ', suggestion).strip()
-            if suggestion and len(suggestions) < 3:  # Only take first 3 valid suggestions
-                suggestions.append(suggestion)
-    
-    return suggestions
+def get_deepseek_response(prompt, wiki_content):
+    """Get response from Deepseek API with follow-up suggestions."""
+    try:
+        # First try to get API key from session state
+        api_key = st.session_state.get('DEEPSEEK_API_KEY')
+        if not api_key:
+            # If not in session state, try to get from secrets
+            try:
+                api_key = st.secrets["DEEPSEEK_API_KEY"]
+            except:
+                return "Please enter your Deepseek API key in the sidebar to continue."
+        
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Build conversation history context
+        conversation_context = ""
+        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
+            recent_messages = st.session_state.messages[-6:]
+            conversation_context = "\nPrevious conversation:\n"
+            for msg in recent_messages:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                content = re.sub(r'<[^>]+>', '', msg["content"])
+                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
+                conversation_context += f"{role}: {content}\n"
+        
+        # Combine wiki content with user's question and conversation context
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
+
+Wikipedia Content:
+{wiki_content}
+
+Previous Conversation:
+{conversation_context}
+
+Current Question: {prompt}
+
+REQUIREMENTS:
+1. Use ONLY information from the provided Wikipedia content
+2. Mark important terms using these exact markers:
+   - Use [1][term] for major historical figures, key events, and primary concepts
+   - Use [2][term] for dates, places, and technical terms
+   - Use [3][term] for supporting concepts and contextual details
+3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
+4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+
+Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+
+        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Focus on historical facts, dates, and concrete developments. Never include metaphorical interpretations or literary references.
+
+Your task is to:
+1. Use ONLY factual information from the provided Wikipedia content
+2. Focus on historical developments, inventions, and concrete events
+3. Avoid metaphors, symbolism, or literary interpretations
+4. Mark important concepts with:
+   - [1][text] for major historical developments, inventions, and key figures
+   - [2][text] for specific dates, places, and technical terms
+   - [3][text] for additional historical context and details (use sparingly)
+
+Keep your response natural and flowing, but always grounded in historical facts."""
+
+        messages=[
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": full_prompt
+            }
+        ]
+
+        try:
+            response = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': messages
+                }
+            )
+            response_text = response.json()['choices'][0]['message']['content']
+            
+            # Split response and suggestions
+            parts = response_text.split('\n')
+            main_response = []
+            suggestions = []
+            
+            for part in parts:
+                if part.strip().startswith('[SUGGESTION]'):
+                    suggestions.append(part.replace('[SUGGESTION]', '').strip())
+                else:
+                    main_response.append(part)
+            
+            main_response = ' '.join(main_response).strip()
+            
+            # Store exactly 3 suggestions in session state
+            if 'suggestions' not in st.session_state:
+                st.session_state.suggestions = []
+            st.session_state.suggestions = suggestions[:3]
+            
+            # If we don't have enough suggestions, generate some based on found articles
+            if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
+                article_titles = list(st.session_state['last_wiki_articles'].keys())
+                while len(st.session_state.suggestions) < 3 and article_titles:
+                    title = random.choice(article_titles)
+                    st.session_state.suggestions.append(f"Tell me more about {title}")
+                    article_titles.remove(title)
+            
+            # If still not enough suggestions, add generic ones
+            while len(st.session_state.suggestions) < 3:
+                st.session_state.suggestions.append("What other historical inventions were significant during this period?")
+            
+            # Clean up formatting artifacts
+            main_response = re.sub(r'PART \d:', '', main_response)
+            main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+            main_response = re.sub(r'\d\. ', '', main_response)
+            main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+            
+            # Process URLs
+            main_response = re.sub(r'https?://\S+', '', main_response)
+            main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+            
+            # Process importance markers in main response
+            for level in range(1, 4):
+                main_response = re.sub(
+                    f'\\[{level}\\]\\[([^\\]]+)\\]',
+                    lambda m: create_wiki_link(m.group(1), 
+                        'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                    main_response
+                )
+            
+            # Remove any remaining instances of the word "term"
+            main_response = re.sub(r'\bterm\b', '', main_response)
+            
+            # Clean up extra spaces and normalize whitespace
+            main_response = re.sub(r'\s+', ' ', main_response)
+            main_response = main_response.strip()
+            
+            return f'<div>{main_response}</div>'
+        except Exception as e:
+            return f"Error communicating with Deepseek API: {str(e)}"
+    except Exception as e:
+        return f"Error communicating with Deepseek API: {str(e)}"
 
 def get_groq_response(prompt, wiki_content):
     """Get response from Groq API with follow-up suggestions."""
@@ -285,26 +654,11 @@ def get_groq_response(prompt, wiki_content):
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
                 content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', lambda m: m.group(2), content)
+                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
-
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are a historian specializing in providing accurate historical information. Your responses must:
-1. Use ONLY information from the provided Wikipedia content
-2. Stay focused on historical facts and developments
-3. Mark important terms with:
-   - [1][term] for major figures and events
-   - [2][term] for dates and places
-   - [3][term] for supporting details
-4. End with exactly three follow-up questions, each on its own line starting with [SUGGESTION]"""
-                },
-                {
-                    "role": "user",
-                    "content": f"""Use ONLY the Wikipedia content below to answer this history question.
+        
+        # Combine wiki content with user's question and conversation context
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
 
 Wikipedia Content:
 {wiki_content}
@@ -312,47 +666,104 @@ Wikipedia Content:
 Previous Conversation:
 {conversation_context}
 
-Current Question: {prompt}"""
+Current Question: {prompt}
+
+REQUIREMENTS:
+1. Use ONLY information from the provided Wikipedia content
+2. Mark important terms using these exact markers:
+   - Use [1][term] for major historical figures, key events, and primary concepts
+   - Use [2][term] for dates, places, and technical terms
+   - Use [3][term] for supporting concepts and contextual details
+3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
+4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+
+Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+
+        completion = client.chat.completions.create(
+            model="mixtral-8x7b-32768",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
+- [1][term] for major figures and primary concepts
+- [2][term] for dates, places, and technical terms
+- [3][term] for supporting details"""
+                },
+                {
+                    "role": "user",
+                    "content": full_prompt
                 }
             ],
             temperature=0.7,
             max_tokens=4096,
-            top_p=1,
-            stream=False
+            top_p=1
         )
         
         response_text = completion.choices[0].message.content.strip()
         
-        # Extract suggestions
-        suggestions = process_suggestions(response_text)
+        # Split response and suggestions
+        parts = response_text.split('\n')
+        main_response = []
+        suggestions = []
         
-        # Store exactly 3 suggestions
+        for part in parts:
+            if part.strip().startswith('[SUGGESTION]'):
+                suggestions.append(part.replace('[SUGGESTION]', '').strip())
+            else:
+                main_response.append(part)
+        
+        main_response = ' '.join(main_response).strip()
+        
+        # Store exactly 3 suggestions in session state
+        if 'suggestions' not in st.session_state:
+            st.session_state.suggestions = []
         st.session_state.suggestions = suggestions[:3]
         
-        # If we don't have enough suggestions, add generic ones based on the topic
+        # If we don't have enough suggestions, generate some based on found articles
+        if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
+            article_titles = list(st.session_state['last_wiki_articles'].keys())
+            while len(st.session_state.suggestions) < 3 and article_titles:
+                title = random.choice(article_titles)
+                st.session_state.suggestions.append(f"Tell me more about {title}")
+                article_titles.remove(title)
+        
+        # If still not enough suggestions, add generic ones
         while len(st.session_state.suggestions) < 3:
-            generic = f"What other aspects of {prompt} would you like to explore?"
-            if generic not in st.session_state.suggestions:
-                st.session_state.suggestions.append(generic)
+            st.session_state.suggestions.append("What other historical inventions were significant during this period?")
         
-        # Clean up the main response
-        main_response = re.sub(r'\[SUGGESTION\].*$', '', response_text, flags=re.MULTILINE).strip()
+        # Clean up formatting artifacts
+        main_response = re.sub(r'PART \d:', '', main_response)
+        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+        main_response = re.sub(r'\d\. ', '', main_response)
+        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
         
-        # Let add_importance_styling handle the importance markers
-        return add_importance_styling(main_response)
+        # Process URLs
+        main_response = re.sub(r'https?://\S+', '', main_response)
+        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        
+        # Process importance markers in main response
+        for level in range(1, 4):
+            main_response = re.sub(
+                f'\\[{level}\\]\\[([^\\]]+)\\]',
+                lambda m: create_wiki_link(m.group(1), 
+                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                main_response
+            )
+        
+        # Remove any remaining instances of the word "term"
+        main_response = re.sub(r'\bterm\b', '', main_response)
+        
+        # Clean up extra spaces and normalize whitespace
+        main_response = re.sub(r'\s+', ' ', main_response)
+        main_response = main_response.strip()
+        
+        return f'<div>{main_response}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
 def validate_content(prompt, response_text):
     """Validate that the AI response stays on topic and relevant to the prompt."""
     try:
-        # Store original response with formatting
-        original_response = response_text
-        
-        # Clean text only for validation purposes
-        validation_text = re.sub(r'<[^>]+>', '', response_text)
-        validation_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', validation_text)
-        
         # Extract key terms from the prompt
         prompt_doc = nlp(prompt)
         prompt_entities = set([ent.text.lower() for ent in prompt_doc.ents])
@@ -364,7 +775,7 @@ def validate_content(prompt, response_text):
         prompt_key_terms.update(historical_terms)
         
         # Extract key terms from the response
-        response_doc = nlp(validation_text)
+        response_doc = nlp(response_text)
         response_entities = set([ent.text.lower() for ent in response_doc.ents])
         
         # Check if the response contains entities not related to the prompt
@@ -404,64 +815,33 @@ Use the same Wikipedia content but stay strictly focused on the topic."""
         st.error(f"Error validating content: {str(e)}")
         return True, None  # Continue with original response if validation fails
 
-def post_process_response(text):
-    """Ensure consistent formatting of important terms in the response."""
-    # Extract entities and important terms
-    doc = nlp(text)
-    
-    # Build a list of terms to mark with importance levels
-    important_terms = []
-    secondary_terms = []
-    tertiary_terms = []
-    
-    # Identify important terms
-    for ent in doc.ents:
-        if ent.label_ in {'PERSON', 'EVENT', 'ORG', 'GPE', 'LOC'}:
-            if len(ent.text) > 3:  # Avoid short terms
-                if ent.label_ in {'PERSON', 'EVENT'}:
-                    important_terms.append(ent.text)
-                elif ent.label_ in {'ORG', 'GPE'}:
-                    secondary_terms.append(ent.text)
-                else:
-                    tertiary_terms.append(ent.text)
-    
-    # Add dates to secondary terms
-    for ent in doc.ents:
-        if ent.label_ == 'DATE':
-            if any(c.isdigit() for c in ent.text):  # Only dates with numbers
-                secondary_terms.append(ent.text)
-    
-    # Sort terms by length (longest first) to handle nested terms correctly
-    important_terms.sort(key=len, reverse=True)
-    secondary_terms.sort(key=len, reverse=True)
-    tertiary_terms.sort(key=len, reverse=True)
-    
-    # Apply formatting
-    for term in important_terms:
-        text = re.sub(rf'\b{re.escape(term)}\b', f'[1][{term}]', text, flags=re.IGNORECASE)
-    for term in secondary_terms:
-        text = re.sub(rf'\b{re.escape(term)}\b', f'[2][{term}]', text, flags=re.IGNORECASE)
-    for term in tertiary_terms:
-        text = re.sub(rf'\b{re.escape(term)}\b', f'[3][{term}]', text, flags=re.IGNORECASE)
-    
-    return text
-
 def get_ai_response(prompt, wiki_content):
     """Get response from selected AI model with follow-up suggestions."""
     try:
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
-        # Get response
+        # Get initial response
         if model_choice == "Deepseek (Requires API Key)":
             response = get_deepseek_response(prompt, wiki_content)
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Apply importance-based styling
-        html_response = add_importance_styling(response)
+        # Extract text content from HTML response
+        clean_response = re.sub(r'<[^>]+>', '', response)
+        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
         
-        # Add sources section
+        # Validate content
+        is_valid, correction_prompt = validate_content(prompt, clean_response)
+        
+        # If content is not valid, get a new response
+        if not is_valid and correction_prompt:
+            if model_choice == "Deepseek (Requires API Key)":
+                response = get_deepseek_response(correction_prompt, wiki_content)
+            else:
+                response = get_groq_response(correction_prompt, wiki_content)
+            
+        # Add sources to the response if we have them
         if 'last_wiki_articles' in st.session_state:
             sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem;">'
             sources_html += '<details style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;">'
@@ -469,18 +849,22 @@ def get_ai_response(prompt, wiki_content):
             sources_html += '<div style="max-height: 300px; overflow-y: auto; padding: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">'
             
             for title, data in st.session_state['last_wiki_articles'].items():
+                # Only show articles that contributed content
                 if data['summary'] or data['used_sections']:
                     sources_html += f'<div style="margin-bottom: 1.5rem;">'
+                    # Article title with link
                     sources_html += f'<div style="margin-bottom: 0.5rem;">'
-                    sources_html += f'<span style="color: rgba(255, 255, 255, 0.8); font-weight: 500;">{title}</span>'
+                    sources_html += f'<a href="https://en.wikipedia.org/wiki/{title.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3); font-weight: 500;">{title}</a>'
                     sources_html += '</div>'
                     
+                    # Main summary
                     if data['summary']:
                         sources_html += '<div style="margin-left: 1rem; margin-bottom: 0.5rem;">'
                         sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>From main article:</em></div>'
                         sources_html += f'<div style="color: rgba(255, 255, 255, 0.5); font-size: 0.9em; line-height: 1.4;">{data["summary"][:200]}...</div>'
                         sources_html += '</div>'
                     
+                    # Used sections
                     if data['used_sections']:
                         sources_html += '<div style="margin-left: 1rem;">'
                         sources_html += f'<div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-bottom: 0.3rem;"><em>Additional sections used:</em></div>'
@@ -495,13 +879,13 @@ def get_ai_response(prompt, wiki_content):
             
             sources_html += '</div></details></div>'
             
-            # Add sources to the response
-            if html_response.endswith('</div>'):
-                html_response = html_response[:-6] + sources_html + '</div>'
+            # Add sources to the response while preserving any existing HTML
+            if response.endswith('</div>'):
+                response = response[:-6] + sources_html + '</div>'
             else:
-                html_response += sources_html
+                response += sources_html
                 
-        return html_response
+        return response
             
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
@@ -571,75 +955,68 @@ def get_audio_base64(text):
         st.error(f"Error generating audio: {str(e)}")
         return None
 
-def handle_chat():
-    # Initialize session state
-    if 'messages' not in st.session_state:
-        st.session_state.messages = []
-    if 'suggestions' not in st.session_state:
-        st.session_state.suggestions = []
-
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"], unsafe_allow_html=True)
-            
-            # Only show suggestions after the most recent assistant message
-            if (message["role"] == "assistant" and 
-                message == st.session_state.messages[-1] and 
-                st.session_state.suggestions):
-                
-                # Create columns for suggestions
-                cols = st.columns(3)
-                for idx, suggestion in enumerate(st.session_state.suggestions):
-                    if suggestion:  # Only create button if suggestion exists
-                        if cols[idx].button(
-                            suggestion,
-                            key=f"suggestion_{idx}_{len(st.session_state.messages)}",
-                            use_container_width=True,
-                            type="secondary"
-                        ):
-                            # Handle suggestion click
-                            st.session_state.messages.append({"role": "user", "content": suggestion})
-                            st.rerun()
-
-# Chat input and main chat loop
-if prompt := st.chat_input("What would you like to know about history?"):
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    # Show assistant response
-    with st.chat_message("assistant"):
-        with st.spinner("Searching Wikipedia and composing response..."):
-            wiki_content = get_wikipedia_content(prompt)
-            
-            if wiki_content:
-                response = get_ai_response(prompt, wiki_content)
-            else:
-                response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
-            
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.rerun()
-
-# Display chat history and handle suggestions
+# Display chat history
 for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
-        st.markdown(message["content"], unsafe_allow_html=True)
+        if message["role"] == "assistant":
+            # Create columns for play button and message
+            cols = st.columns([0.9, 0.1])
+            with cols[1]:
+                if st.button("🔊", key=f"play_{idx}", help="Play audio"):
+                    # Generate and play audio
+                    clean_text = re.sub(r'<[^>]+>', '', message['content'])
+                    clean_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_text)
+                    
+                    # Create audio in memory
+                    mp3_fp = io.BytesIO()
+                    tts = gTTS(text=clean_text, lang='en', tld='co.uk')
+                    tts.write_to_fp(mp3_fp)
+                    mp3_fp.seek(0)
+                    
+                    # Play audio using HTML5 audio
+                    audio_bytes = mp3_fp.read()
+                    st.audio(audio_bytes, format='audio/mp3')
+            
+            with cols[0]:
+                st.markdown(message["content"], unsafe_allow_html=True)
+        else:
+            st.markdown(message["content"], unsafe_allow_html=True)
         
-        # Only show suggestions after the most recent assistant message
+        # Show suggestion buttons only for the most recent assistant message
         if (message["role"] == "assistant" and 
             idx == len(st.session_state.messages) - 1 and 
             st.session_state.suggestions):
-            
-            # Create columns for suggestions
-            cols = st.columns(3)
-            for i, suggestion in enumerate(st.session_state.suggestions):
-                if suggestion:  # Only create button if suggestion exists
-                    if cols[i].button(
-                        suggestion,
-                        key=f"suggestion_{i}_{idx}",
-                        use_container_width=True,
-                        type="secondary"
-                    ):
-                        # Add suggestion as user message
-                        st.session_state.messages.append({"role": "user", "content": suggestion})
-                        st.rerun()  # Rerun here to update chat before getting response 
+            cols = st.columns(len(st.session_state.suggestions))
+            for i, (col, suggestion) in enumerate(zip(cols, st.session_state.suggestions)):
+                # Clean up the suggestion text
+                clean_suggestion = suggestion.strip()
+                # Remove importance markers and clean up text
+                clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_suggestion)
+                clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
+                # Use a unique key combining message index and suggestion index
+                button_key = f"suggestion_{idx}_{i}"
+                if col.button(clean_suggestion, key=button_key):
+                    st.session_state.messages.append({"role": "user", "content": clean_suggestion})
+                    wiki_content = get_wikipedia_content(clean_suggestion)
+                    if wiki_content:
+                        response = get_ai_response(clean_suggestion, wiki_content)
+                    else:
+                        response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.rerun()
+
+# Chat input
+if prompt := st.chat_input("What would you like to know about history?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt, unsafe_allow_html=True)
+
+    wiki_content = get_wikipedia_content(prompt)
+    
+    if wiki_content:
+        response = get_ai_response(prompt, wiki_content)
+    else:
+        response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.rerun() 
