@@ -656,38 +656,42 @@ def get_groq_response(prompt, wiki_content):
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
-        
-        # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
 
-Wikipedia Content:
+        # Create a more explicit system prompt for formatting
+        system_prompt = """You are a historical chatbot. Format your response exactly as follows:
+
+1. Use these exact markers for important terms:
+   [1][text] = major historical figures/events
+   [2][text] = dates and places
+   [3][text] = supporting details
+
+2. End with exactly 3 follow-up questions, each on a new line starting with [SUGGESTION]
+
+Example format:
+[1][World War II] began in [2][1939] when [1][Nazi Germany] invaded [2][Poland]. [3][The invasion used blitzkrieg tactics].
+
+[SUGGESTION] Question 1?
+[SUGGESTION] Question 2?
+[SUGGESTION] Question 3?"""
+
+        # Combine wiki content with user's question
+        full_prompt = f"""Use ONLY this Wikipedia content to answer the question:
+
 {wiki_content}
 
 Previous Conversation:
 {conversation_context}
 
-Current Question: {prompt}
+Question: {prompt}
 
-REQUIREMENTS:
-1. Use ONLY information from the provided Wikipedia content
-2. Mark important terms using these exact markers:
-   - Use [1][term] for major historical figures, key events, and primary concepts
-   - Use [2][term] for dates, places, and technical terms
-   - Use [3][term] for supporting concepts and contextual details
-3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
-
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+Remember to use [1][text], [2][text], [3][text] markers and end with [SUGGESTION] questions."""
 
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
-- [1][term] for major figures and primary concepts
-- [2][term] for dates, places, and technical terms
-- [3][term] for supporting details"""
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
