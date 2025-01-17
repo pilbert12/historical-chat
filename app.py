@@ -32,22 +32,37 @@ def process_importance_markers(text):
     # Clean up any existing formatting
     text = re.sub(r'<[^>]+>', '', text)
     
-    # Remove any trailing dashes or artifacts
-    text = re.sub(r'\s*-\s*$', '', text)
+    # Load spacy model for NLP processing
+    nlp = spacy.load('en_core_web_sm')
     
-    # Clean up any numbered lists
-    text = re.sub(r'^\d+\.\s*', '', text, flags=re.MULTILINE)
+    # Process the text with spaCy
+    doc = nlp(text)
     
-    # Process importance markers with better spacing
-    text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
-    text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
-    text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
+    # Process each token based on its type
+    processed_text = []
+    for token in doc:
+        # Primary terms: Proper nouns, dates, locations, pronouns
+        if (token.pos_ in ['PROPN'] or 
+            token.ent_type_ in ['DATE', 'GPE', 'LOC', 'PERSON'] or 
+            token.pos_ == 'PRON'):
+            processed_text.append(f'<span class="primary-term">{token.text}</span>')
+        
+        # Secondary terms: Regular nouns, verbs, adjectives
+        elif token.pos_ in ['NOUN', 'VERB', 'ADJ']:
+            processed_text.append(f'<span class="secondary-term">{token.text}</span>')
+        
+        # Tertiary terms: Everything else
+        else:
+            processed_text.append(f'<span class="tertiary-term">{token.text}</span>')
+    
+    # Join the tokens back together
+    result = ' '.join(processed_text)
     
     # Clean up extra whitespace
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip()
+    result = re.sub(r'\s+', ' ', result)
+    result = result.strip()
     
-    return f'<div>{text}</div>'
+    return f'<div>{result}</div>'
 
 def save_api_keys():
     """Save API keys to user's profile."""
@@ -211,20 +226,19 @@ st.markdown("""
     
     /* Importance-based text styling */
     .primary-term {
-        color: rgba(255, 255, 255, 1) !important;
+        color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 600;
         letter-spacing: 0.3px;
     }
     
     .secondary-term {
-        color: rgba(255, 255, 255, 0.85) !important;
-        font-weight: 500;
+        color: rgba(255, 255, 255, 0.75) !important;
+        font-weight: 400;
     }
     
     .tertiary-term {
-        color: rgba(255, 255, 255, 0.75) !important;
-        font-style: normal;
-        font-weight: 400;
+        color: rgba(255, 255, 255, 0.5) !important;
+        font-weight: 300;
     }
     
     /* Chat message container */
