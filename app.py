@@ -849,7 +849,7 @@ for idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         if message["role"] == "assistant":
             # Create columns for play button and message
-            cols = st.columns([0.9, 0.1])
+            cols = st.columns([0.8, 0.1, 0.1])
             with cols[1]:
                 if st.button("🔊", key=f"play_{idx}", help="Play audio"):
                     # Generate and play audio
@@ -866,6 +866,28 @@ for idx, message in enumerate(st.session_state.messages):
                     audio_bytes = mp3_fp.read()
                     st.audio(audio_bytes, format='audio/mp3')
             
+            with cols[2]:
+                if idx == len(st.session_state.messages) - 1:  # Only for latest message
+                    if st.button("🎲", key=f"shuffle_{idx}", help="Generate new suggestions"):
+                        # Get the last user message for context
+                        last_user_msg = None
+                        for msg in reversed(st.session_state.messages[:-1]):  # Exclude current message
+                            if msg["role"] == "user":
+                                last_user_msg = msg["content"]
+                                break
+                        
+                        if last_user_msg:
+                            wiki_content = get_wikipedia_content(last_user_msg)
+                            if not wiki_content:
+                                wiki_content = "No direct Wikipedia article found for this query."
+                            
+                            # Get new response with new suggestions
+                            response = get_ai_response(last_user_msg, wiki_content)
+                            # Update the current message content
+                            st.session_state.messages[-1]["content"] = response
+                            save_conversation()
+                            st.rerun()
+            
             with cols[0]:
                 st.markdown(message["content"], unsafe_allow_html=True)
         else:
@@ -875,6 +897,10 @@ for idx, message in enumerate(st.session_state.messages):
         if (message["role"] == "assistant" and 
             idx == len(st.session_state.messages) - 1 and 
             st.session_state.suggestions):
+            
+            st.markdown("---")  # Add a separator
+            st.write("Follow-up Questions:")
+            
             cols = st.columns(len(st.session_state.suggestions))
             for i, (col, suggestion) in enumerate(zip(cols, st.session_state.suggestions)):
                 # Clean up the suggestion text
