@@ -489,175 +489,20 @@ Found content from {total_content_found} sources""")
         st.error(f"Error searching Wikipedia: {str(e)}")
         return None
 
-def get_deepseek_response(prompt, wiki_content):
-    """Get response from Deepseek API with follow-up suggestions."""
-    try:
-        # First try to get API key from session state
-        api_key = st.session_state.get('DEEPSEEK_API_KEY')
-        if not api_key:
-            # If not in session state, try to get from secrets
-            try:
-                api_key = st.secrets["DEEPSEEK_API_KEY"]
-            except:
-                return "Please enter your Deepseek API key in the sidebar to continue."
-        
-        headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Build conversation history context
-        conversation_context = ""
-        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
-            conversation_context = "\nPrevious conversation:\n"
-            for msg in recent_messages:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-                conversation_context += f"{role}: {content}\n"
-        
-        # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
-
-Wikipedia Content:
-{wiki_content}
-
-Previous Conversation:
-{conversation_context}
-
-Current Question: {prompt}
-
-REQUIREMENTS:
-1. Use ONLY information from the provided Wikipedia content
-2. Mark important terms using these exact markers:
-   - Use [1][term] for major historical figures, key events, and primary concepts
-   - Use [2][term] for dates, places, and technical terms
-   - Use [3][term] for supporting concepts and contextual details
-3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
-
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
-
-        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Focus on historical facts, dates, and concrete developments. Never include metaphorical interpretations or literary references.
-
-Your task is to:
-1. Use ONLY factual information from the provided Wikipedia content
-2. Focus on historical developments, inventions, and concrete events
-3. Avoid metaphors, symbolism, or literary interpretations
-4. Mark important concepts with:
-   - [1][text] for major historical developments, inventions, and key figures
-   - [2][text] for specific dates, places, and technical terms
-   - [3][text] for additional historical context and details (use sparingly)
-
-Keep your response natural and flowing, but always grounded in historical facts."""
-
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": full_prompt
-            }
-        ]
-
-        try:
-            response = requests.post(
-                'https://api.deepseek.com/v1/chat/completions',
-                headers=headers,
-                json={
-                    'model': 'deepseek-chat',
-                    'messages': messages
-                }
-            )
-            response_text = response.json()['choices'][0]['message']['content']
-            
-            # Split response and suggestions
-            parts = response_text.split('\n')
-            main_response = []
-            suggestions = []
-            
-            for part in parts:
-                if part.strip().startswith('[SUGGESTION]'):
-                    suggestions.append(part.replace('[SUGGESTION]', '').strip())
-                else:
-                    main_response.append(part)
-            
-            main_response = ' '.join(main_response).strip()
-            
-            # Store exactly 3 suggestions in session state
-            if 'suggestions' not in st.session_state:
-                st.session_state.suggestions = []
-            st.session_state.suggestions = suggestions[:3]
-            
-            # If we don't have enough suggestions, generate some based on found articles
-            if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
-                article_titles = list(st.session_state['last_wiki_articles'].keys())
-                while len(st.session_state.suggestions) < 3 and article_titles:
-                    title = random.choice(article_titles)
-                    st.session_state.suggestions.append(f"Tell me more about {title}")
-                    article_titles.remove(title)
-            
-            # If still not enough suggestions, add generic ones
-            while len(st.session_state.suggestions) < 3:
-                st.session_state.suggestions.append("What other historical inventions were significant during this period?")
-            
-            # Clean up formatting artifacts
-            main_response = re.sub(r'PART \d:', '', main_response)
-            main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-            main_response = re.sub(r'\d\. ', '', main_response)
-            main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-            
-            # Process URLs
-            main_response = re.sub(r'https?://\S+', '', main_response)
-            main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-            
-            # Process importance markers in main response
-            for level in range(1, 4):
-                main_response = re.sub(
-                    f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: create_wiki_link(m.group(1), 
-                        'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                    main_response
-                )
-            
-            # Remove any remaining instances of the word "term"
-            main_response = re.sub(r'\bterm\b', '', main_response)
-            
-            # Clean up extra spaces and normalize whitespace
-            main_response = re.sub(r'\s+', ' ', main_response)
-            main_response = main_response.strip()
-            
-            return f'<div>{main_response}</div>'
-        except Exception as e:
-            return f"Error communicating with Deepseek API: {str(e)}"
-    except Exception as e:
-        return f"Error communicating with Deepseek API: {str(e)}"
-
 def get_groq_response(prompt, wiki_content):
     """Get response from Groq API with follow-up suggestions."""
     try:
-        api_key = st.session_state.get('GROQ_API_KEY')
-        if not api_key:
-            return "Please enter your Groq API key in the sidebar to continue. You can get a free key from groq.com"
+        if 'GROQ_API_KEY' not in st.session_state:
+            return "Please enter your Groq API key in the sidebar to continue."
         
-        # Initialize Groq client
+        api_key = st.session_state['GROQ_API_KEY']
         client = Groq(api_key=api_key)
         
-        # Build conversation history context
+        # Build the full prompt with context
         conversation_context = ""
-        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
-            conversation_context = "\nPrevious conversation:\n"
-            for msg in recent_messages:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-                conversation_context += f"{role}: {content}\n"
+        if len(st.session_state.messages) > 0:
+            conversation_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-2:]])
         
-        # Combine wiki content with user's question and conversation context
         full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
 
 Wikipedia Content:
@@ -669,25 +514,30 @@ Previous Conversation:
 Current Question: {prompt}
 
 REQUIREMENTS:
-1. Use ONLY information from the provided Wikipedia content
-2. Mark important terms using these exact markers:
-   - Use [1][term] for major historical figures, key events, and primary concepts
-   - Use [2][term] for dates, places, and technical terms
-   - Use [3][term] for supporting concepts and contextual details
-3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+1. First provide your main response using these markers:
+   - [1][text] for major historical developments, key events, and primary figures
+   - [2][text] for specific dates, places, and technical terms
+   - [3][text] for supporting historical context
 
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+2. Then add EXACTLY THREE follow-up questions, each on its own line, using this exact format:
+[SUGGESTION] Your first question here?
+[SUGGESTION] Your second question here?
+[SUGGESTION] Your third question here?
 
+Your follow-up questions must:
+- Be directly related to the content of your response
+- Encourage deeper exploration of specific aspects mentioned
+- Not be generic or superficial
+- Each focus on a different aspect of the topic
+
+Keep your response natural and flowing, without section headers or numbering."""
+        
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
-- [1][term] for major figures and primary concepts
-- [2][term] for dates, places, and technical terms
-- [3][term] for supporting details"""
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
@@ -699,67 +549,68 @@ Keep your response natural and flowing, without section headers or numbering. Fo
             top_p=1
         )
         
-        response_text = completion.choices[0].message.content.strip()
+        response = completion.choices[0].message.content
         
-        # Split response and suggestions
-        parts = response_text.split('\n')
-        main_response = []
-        suggestions = []
+        # Extract suggestions from the response
+        extract_suggestions(response)
         
-        for part in parts:
-            if part.strip().startswith('[SUGGESTION]'):
-                suggestions.append(part.replace('[SUGGESTION]', '').strip())
-            else:
-                main_response.append(part)
+        return response
         
-        main_response = ' '.join(main_response).strip()
-        
-        # Store exactly 3 suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
-        st.session_state.suggestions = suggestions[:3]
-        
-        # If we don't have enough suggestions, generate some based on found articles
-        if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
-            article_titles = list(st.session_state['last_wiki_articles'].keys())
-            while len(st.session_state.suggestions) < 3 and article_titles:
-                title = random.choice(article_titles)
-                st.session_state.suggestions.append(f"Tell me more about {title}")
-                article_titles.remove(title)
-        
-        # If still not enough suggestions, add generic ones
-        while len(st.session_state.suggestions) < 3:
-            st.session_state.suggestions.append("What other historical inventions were significant during this period?")
-        
-        # Clean up formatting artifacts
-        main_response = re.sub(r'PART \d:', '', main_response)
-        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-        main_response = re.sub(r'\d\. ', '', main_response)
-        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-        
-        # Process URLs
-        main_response = re.sub(r'https?://\S+', '', main_response)
-        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-        
-        # Process importance markers in main response
-        for level in range(1, 4):
-            main_response = re.sub(
-                f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: create_wiki_link(m.group(1), 
-                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                main_response
-            )
-        
-        # Remove any remaining instances of the word "term"
-        main_response = re.sub(r'\bterm\b', '', main_response)
-        
-        # Clean up extra spaces and normalize whitespace
-        main_response = re.sub(r'\s+', ' ', main_response)
-        main_response = main_response.strip()
-        
-        return f'<div>{main_response}</div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
+
+def get_deepseek_response(prompt, wiki_content):
+    """Get response from Deepseek API with follow-up suggestions."""
+    try:
+        if 'DEEPSEEK_API_KEY' not in st.session_state:
+            return "Please enter your Deepseek API key in the sidebar to continue."
+        
+        api_key = st.session_state['DEEPSEEK_API_KEY']
+        client = DeepSeekAPI(api_key)
+        
+        # Build the full prompt with context
+        conversation_context = ""
+        if len(st.session_state.messages) > 0:
+            conversation_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages[-2:]])
+        
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
+
+Wikipedia Content:
+{wiki_content}
+
+Previous Conversation:
+{conversation_context}
+
+Current Question: {prompt}
+
+REQUIREMENTS:
+1. First provide your main response using these markers:
+   - [1][text] for major historical developments, key events, and primary figures
+   - [2][text] for specific dates, places, and technical terms
+   - [3][text] for supporting historical context
+
+2. Then add EXACTLY THREE follow-up questions, each on its own line, using this exact format:
+[SUGGESTION] Your first question here?
+[SUGGESTION] Your second question here?
+[SUGGESTION] Your third question here?
+
+Your follow-up questions must:
+- Be directly related to the content of your response
+- Encourage deeper exploration of specific aspects mentioned
+- Not be generic or superficial
+- Each focus on a different aspect of the topic
+
+Keep your response natural and flowing, without section headers or numbering."""
+        
+        response = client.get_chat_response(full_prompt, system_prompt)
+        
+        # Extract suggestions from the response
+        extract_suggestions(response)
+        
+        return response
+        
+    except Exception as e:
+        return f"Error communicating with Deepseek API: {str(e)}"
 
 def validate_content(prompt, response_text):
     """Validate that the AI response stays on topic and relevant to the prompt."""
@@ -1020,3 +871,32 @@ if prompt := st.chat_input("What would you like to know about history?"):
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun() 
+
+def extract_suggestions(response):
+    """Extract suggestions from the AI response."""
+    suggestions = []
+    lines = response.split('\n')
+    for line in lines:
+        if line.startswith('[SUGGESTION]'):
+            suggestion = line.replace('[SUGGESTION]', '').strip()
+            if suggestion:
+                suggestions.append(suggestion)
+    
+    # If we found suggestions, use them
+    if suggestions:
+        st.session_state.suggestions = suggestions[:3]
+        return
+        
+    # Otherwise, try to generate suggestions from article titles
+    if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
+        article_titles = list(st.session_state['last_wiki_articles'].keys())
+        random.shuffle(article_titles)
+        for title in article_titles:
+            if len(st.session_state.suggestions) >= 3:
+                break
+            if title not in st.session_state.suggestions:
+                st.session_state.suggestions.append(f"What role did {title} play in this historical period?")
+    
+    # Add fallback suggestion if needed
+    while len(st.session_state.suggestions) < 3:
+        st.session_state.suggestions.append("What other historical events were significant during this period?") 
