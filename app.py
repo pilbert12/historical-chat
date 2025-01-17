@@ -316,26 +316,30 @@ Previous Conversation:
 
 Current Question: {prompt}
 
-REQUIREMENTS:
-1. Use ONLY information from the provided Wikipedia content
-2. Mark important terms using these exact markers:
-   - Use [1][term] for major historical figures, key events, and primary concepts
-   - Use [2][term] for dates, places, and technical terms
-   - Use [3][term] for supporting concepts and contextual details
-3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+CRITICAL FORMATTING REQUIREMENTS:
+1. You MUST mark ALL important terms in your response using these exact markers:
+   - [1][term] for major historical figures, key events, and primary concepts
+   - [2][term] for dates, places, and technical terms
+   - [3][term] for supporting concepts and contextual details
+   Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566].
 
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
+2. Use ONLY information from the provided Wikipedia content.
+
+3. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
+
+Keep your response natural and flowing, without section headers or numbering."""
 
         completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
-- [1][term] for major figures and primary concepts
+                    "content": """You are a knowledgeable historical chatbot. You MUST mark ALL important terms in your response using these exact markers:
+- [1][term] for major historical figures, key events, and primary concepts
 - [2][term] for dates, places, and technical terms
-- [3][term] for supporting details"""
+- [3][term] for supporting concepts and contextual details
+
+Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566]."""
                 },
                 {
                     "role": "user",
