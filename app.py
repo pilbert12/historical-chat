@@ -690,6 +690,7 @@ if prompt := st.chat_input("What would you like to know about history?"):
                 response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
             
             st.session_state.messages.append({"role": "assistant", "content": response})
+            st.rerun()
 
 # Display chat history and handle suggestions
 for idx, message in enumerate(st.session_state.messages):
@@ -711,18 +712,6 @@ for idx, message in enumerate(st.session_state.messages):
                         use_container_width=True,
                         type="secondary"
                     ):
-                        # Add suggestion as user message and get AI response
+                        # Add suggestion as user message
                         st.session_state.messages.append({"role": "user", "content": suggestion})
-                        
-                        # Get AI response for the suggestion
-                        with st.spinner("Searching Wikipedia and composing response..."):
-                            wiki_content = get_wikipedia_content(suggestion)
-                            
-                            if wiki_content:
-                                response = get_ai_response(suggestion, wiki_content)
-                            else:
-                                response = get_ai_response(suggestion, "No direct Wikipedia article found for this query.")
-                            
-                            st.session_state.messages.append({"role": "assistant", "content": response})
-                        
-                        st.rerun() 
+                        st.rerun()  # Rerun here to update chat before getting response 
