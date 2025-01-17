@@ -406,154 +406,41 @@ def get_wikipedia_content(query):
         # Remove duplicates while preserving order
         search_terms = list(dict.fromkeys(search_terms))
         
+        # Process main search results
         wiki_content = []
         seen_content = set()
-        found_articles = {}  # Track which articles contributed what content
+        found_articles = {}
         processed_count = 0
-        
-        def process_article(title, depth=0, max_depth=3):
-            """Process an article and its related links up to max_depth."""
-            nonlocal processed_count, total_content_found
-            if depth > max_depth or title in found_articles:
-                return
-            
-            try:
-                processed_count += 1
-                search_progress.markdown(f"🔍 Searching... (Articles processed: {processed_count})\n\nCurrently analyzing: {title}")
-                
-                page = wiki.page(title)
-                if not page.exists():
-                    return
-                    
-                # Get summary and calculate relevance score
-                summary = page.summary
-                relevance_score = 0
-                
-                # Calculate relevance based on key term matches in title and summary
-                title_matches = sum(term.lower() in title.lower() for term in key_terms) * 4  # Increased title weight
-                summary_matches = sum(term.lower() in summary.lower() for term in key_terms)
-                
-                # Additional relevance for exact phrase matches
-                exact_phrase_matches = sum(query.lower() in title.lower() or query.lower() in summary.lower())
-                
-                # Calculate final relevance score
-                relevance_score = title_matches + summary_matches + (exact_phrase_matches * 5)
-                
-                # Only process if article has good relevance
-                if relevance_score >= 2:  # Increased threshold
-                    # Track what content we're using from this article
-                    found_articles[title] = {
-                        'summary': summary[:1000],
-                        'used_sections': [],
-                        'relevance': relevance_score,
-                        'depth': depth
-                    }
-                    
-                    # Add summary if unique and highly relevant
-                    if summary not in seen_content and relevance_score >= 3:
-                        seen_content.add(summary)
-                        wiki_content.append((f"From article '{title}':\n{summary[:1000]}", relevance_score))
-                        total_content_found += 1
-                        
-                    # Look for relevant sections
-                    sections = page.sections
-                    if sections:
-                        relevant_sections = []
-                        for section in sections:
-                            section_text = page.section_by_title(section)
-                            if len(section_text) > 100:
-                                section_matches = sum(term.lower() in section_text.lower() for term in key_terms)
-                                if section_matches > 0:
-                                    relevant_sections.append((section, section_text, section_matches))
-                        
-                        # Sort sections by relevance
-                        relevant_sections.sort(key=lambda x: x[2], reverse=True)
-                        
-                        # Take top 3 most relevant sections
-                        for section, section_text, section_score in relevant_sections[:3]:
-                            section_summary = section_text[:500]
-                            if section_summary not in seen_content:
-                                seen_content.add(section_summary)
-                                wiki_content.append((f"Additional context from section '{section}':\n{section_summary}", section_score))
-                                found_articles[title]['used_sections'].append({
-                                    'name': section,
-                                    'content': section_summary
-                                })
-                        
-                    # Follow relevant links only if this is a highly relevant article
-                    if depth < max_depth and relevance_score >= 3:
-                        links = page.links
-                        relevant_links = []
-                        for link in links:
-                            link_score = sum(term.lower() in link.lower() for term in key_terms)
-                            if link_score > 0:
-                                relevant_links.append((link, link_score))
-                        
-                        relevant_links.sort(key=lambda x: x[1], reverse=True)
-                        for link, _ in relevant_links[:5]:
-                            process_article(link, depth + 1, max_depth)
-                            
-            except Exception as e:
-                return
-        
-        # Process main search results
         total_content_found = 0
-        relevant_snippets = []
-        final_content = []  # Track final content separately
         
         for term in search_terms:
             try:
                 search_progress.markdown(f"🔍 Searching for: {term}")
                 search_results = wikipedia.search(term, results=8)
                 for title in search_results:
-                    content_before = len(wiki_content)
-                    process_article(title)
-                    if len(wiki_content) > content_before:
-                        total_content_found += 1
-                        relevant_snippets.append(title)
+                    if title not in found_articles:  # Only process new articles
+                        process_article(title)
+                        if title in found_articles:  # If article was added
+                            total_content_found += 1
                     
-                if total_content_found >= 3 and max(score for _, score in wiki_content) >= 5:
+                if total_content_found >= 3 and any(score >= 5 for _, score in wiki_content):
                     break
                     
             except Exception as e:
                 continue
-                
-        # Sort content by relevance and prepare final content
-        wiki_content.sort(key=lambda x: x[1], reverse=True)
-        final_content = [content for content, _ in wiki_content[:8]]
-        initial_content_count = len(final_content)
         
-        # If we haven't found enough content, expand search
-        if total_content_found < 3:
-            search_progress.markdown("🔍 Expanding search with broader terms...")
-            time.sleep(1)
-            
-            for title in wikipedia.search(query, results=20):
-                content_before = len(wiki_content)
-                process_article(title)
-                if len(wiki_content) > content_before:
-                    total_content_found += 1
-                    relevant_snippets.append(title)
-                if total_content_found >= 3:
-                    # Resort and update final content
-                    wiki_content.sort(key=lambda x: x[1], reverse=True)
-                    final_content = [content for content, _ in wiki_content[:8]]
-                    break
-
+        # Sort content by relevance
+        wiki_content.sort(key=lambda x: x[1], reverse=True)
+        
         # Show final search completion message
-        final_content_count = len(final_content)
         search_progress.markdown(f"""✅ Search complete
-Found content from {final_content_count} sources""")
+Found content from {total_content_found} sources""")
         time.sleep(2)
         search_progress.empty()
-
-        # Reset suggestions at the start of each new response
-        st.session_state.suggestions = []
         
-        if final_content:
-            # Store found articles in session state for reference
+        if wiki_content:
             st.session_state['last_wiki_articles'] = found_articles
-            return "\n\n".join(final_content)
+            return "\n\n".join(content for content, _ in wiki_content[:8])
         return None
     except Exception as e:
         st.error(f"Error searching Wikipedia: {str(e)}")
