@@ -600,9 +600,9 @@ def get_ai_response(prompt, wiki_content):
             
         # Add sources to the response if we have them
         if sources:
-            sources_html = '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.9em; color: rgba(255, 255, 255, 0.5);">'
-            sources_html += '<strong>Wikipedia Sources:</strong><br>'
-            sources_html += '<br>'.join(f'• <a href="https://en.wikipedia.org/wiki/{source.replace(" ", "_")}" target="_blank">{source}</a>' for source in sources)
+            sources_html = '<div style="margin-top: 2rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(255, 255, 255, 0.02); font-size: 0.9em; color: rgba(255, 255, 255, 0.5);">'
+            sources_html += '<strong style="color: rgba(255, 255, 255, 0.7);">Wikipedia Sources:</strong><br>'
+            sources_html += '<br>'.join(f'• <a href="https://en.wikipedia.org/wiki/{source.replace(" ", "_")}" target="_blank" style="color: rgba(255, 255, 255, 0.6); text-decoration: none; border-bottom: 1px dotted rgba(255, 255, 255, 0.3);">{source}</a>' for source in sources)
             sources_html += '</div>'
             
             # Add sources to the response while preserving any existing HTML
