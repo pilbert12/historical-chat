@@ -11,6 +11,7 @@ import base64
 import io
 from groq import Groq
 import time
+import json
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -358,223 +359,239 @@ def add_wiki_links(text):
     return f'<div>{final_text}</div>'
 
 def get_wikipedia_content(query):
-    """Search Wikipedia and get content for the query."""
+    """Search Wikipedia and get content for the query using AI-driven search."""
     try:
         # Create a placeholder for showing search progress
         search_progress = st.empty()
+        search_progress.markdown("🤔 Analyzing query to develop search strategy...")
         
-        # Clean up query and extract key terms
-        search_progress.markdown("🔍 Analyzing query and extracting key terms...")
-        doc = nlp(query)
+        # Get model choice from session state
+        model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
-        # Extract dates and years
-        years = set()
-        for ent in doc.ents:
-            if ent.label_ == 'DATE':
-                year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
-                if year_match:
-                    years.add(year_match.group(0))
+        # Build search strategy prompt
+        strategy_prompt = f"""As a historical research assistant, analyze this query and develop a comprehensive search strategy.
+
+Query: {query}
+
+Create a search strategy that will help find relevant Wikipedia articles. Consider:
+1. Key historical figures, events, and concepts
+2. Relevant time periods and locations
+3. Related historical contexts and themes
+4. Alternative names or terms that might be used
+
+Respond with ONLY a JSON array of search terms, ordered from most specific to most general. Example:
+["exact term", "alternative term", "broader context", ...]"""
+
+        # Get AI-generated search strategy
+        if model_choice == "Deepseek (Requires API Key)":
+            api_key = st.session_state.get('DEEPSEEK_API_KEY')
+            if not api_key:
+                return None
+                
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': [
+                        {
+                            'role': 'system',
+                            'content': 'You are a historical research assistant. Respond only with a JSON array of search terms.'
+                        },
+                        {
+                            'role': 'user',
+                            'content': strategy_prompt
+                        }
+                    ],
+                    'temperature': 0.3
+                }
+            )
+            search_terms = json.loads(response.json()['choices'][0]['message']['content'])
+            
+        else:
+            api_key = st.session_state.get('GROQ_API_KEY')
+            if not api_key:
+                return None
+                
+            client = Groq(api_key=api_key)
+            
+            completion = client.chat.completions.create(
+                model="mixtral-8x7b-32768",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a historical research assistant. Respond only with a JSON array of search terms."
+                    },
+                    {
+                        "role": "user",
+                        "content": strategy_prompt
+                    }
+                ],
+                temperature=0.3
+            )
+            
+            search_terms = json.loads(completion.choices[0].message.content)
         
-        # Build search terms with historical context
-        key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
-        search_progress.markdown("📚 Building search strategy...")
-        
-        # Track search metrics
-        total_articles_found = 0
-        relevant_articles_found = 0
-        max_search_time = 30  # Maximum search time in seconds
-        start_time = time.time()
-        
-        # Generate broader search terms
-        search_terms = []
-        
-        # Economic/industry specific terms for better context
-        industry_terms = [
-            "economic history",
-            "industrial history",
-            "industry statistics",
-            "economic statistics",
-            "industrial production",
-            "economic growth",
-            "major industries",
-            "industrial development",
-            "economic sectors",
-            "business history"
-        ]
-        
-        # If we have a year, prioritize searches with that year
-        if years:
-            for year in years:
-                # Add year-specific search terms
-                search_terms.extend([
-                    f"{year} in history",
-                    f"historical events {year}",
-                    f"{year} history",
-                    f"economy in {year}",
-                    f"industrial history {year}",
-                    f"economic conditions {year}",
-                ])
-                # Combine year with other key terms
-                for term in key_terms:
-                    search_terms.append(f"{term} {year}")
-                # Add industry-specific year combinations
-                for term in industry_terms:
-                    search_terms.append(f"{term} {year}")
-        
-        # Add general historical search terms
-        search_terms.extend([
-            query + " historical event",
-            query + " in history",
-            query + " economic history",
-            query + " industrial history",
-            query
-        ] + key_terms + industry_terms)
-        
-        # Remove duplicates while preserving order
-        search_terms = list(dict.fromkeys(search_terms))
-        
+        # Initialize tracking variables
         wiki_content = []
         seen_content = set()
-        found_articles = {}  # Track which articles contributed what content
+        found_articles = {}
         processed_count = 0
+        relevant_articles_found = 0
         
-        def should_continue_search():
-            """Determine if the search should continue based on various metrics."""
-            current_time = time.time()
-            search_duration = current_time - start_time
-            
-            # Stop conditions:
-            # 1. Exceeded max search time
-            if search_duration > max_search_time:
-                return False
-                
-            # 2. Found enough high-quality articles
-            if len(found_articles) >= 20 and relevant_articles_found >= 10:
-                return False
-                
-            # 3. Processed too many articles with diminishing returns
-            if processed_count > 200:
-                return False
-                
-            return True
+        # Search progress tracking
+        search_progress.markdown("🔍 Beginning intelligent search process...")
         
-        def process_article(title, depth=0, max_depth=2):
-            """Process an article and its related links up to max_depth."""
-            nonlocal processed_count, relevant_articles_found, key_terms
-            
-            if not should_continue_search() or depth > max_depth or title in found_articles:
-                return
-            
-            try:
-                processed_count += 1
-                search_progress.markdown(
-                    f"🔍 Searching... (Articles processed: {processed_count})\n\n"
-                    f"Currently analyzing: {title}\n\n"
-                    f"Relevant articles found: {relevant_articles_found}"
-                )
-                
-                page = wiki.page(title)
-                if not page.exists():
-                    return
-                    
-                # Get summary and check relevance
-                summary = page.summary
-                
-                # Validate summary content
-                if not validate_wiki_content(summary, title, key_terms):
-                    return
-                    
-                # Track what content we're using from this article
-                found_articles[title] = {
-                    'summary': summary[:1000],
-                    'used_sections': [],
-                    'relevance': 'primary' if depth == 0 else 'related'
-                }
-                
-                relevant_articles_found += 1
-                
-                # Add summary if unique
-                if summary not in seen_content:
-                    seen_content.add(summary)
-                    wiki_content.append(f"From article '{title}':\n{summary[:1000]}")
-                    
-                # Look for relevant sections
-                sections = page.sections
-                if sections and should_continue_search():
-                    relevant_sections = []
-                    for section in sections:
-                        section_text = page.section_by_title(section)
-                        if len(section_text) > 100 and validate_wiki_content(section_text, title, key_terms):
-                            relevant_sections.append((section, section_text))
-                    
-                    # Sort sections by relevance
-                    relevant_sections.sort(key=lambda x: sum(term.lower() in x[1].lower() for term in key_terms), reverse=True)
-                    
-                    # Take top 5 most relevant sections
-                    for section, section_text in relevant_sections[:5]:
-                        if not should_continue_search():
-                            break
-                        section_summary = section_text[:500]
-                        if section_summary not in seen_content:
-                            seen_content.add(section_summary)
-                            wiki_content.append(f"Additional context from section '{section}':\n{section_summary}")
-                            found_articles[title]['used_sections'].append({
-                                'name': section,
-                                'content': section_summary
-                            })
-                
-                # If this is not too deep, follow links to related articles
-                if depth < max_depth and should_continue_search():
-                    # Get links from the page
-                    links = page.links
-                    # Sort links by relevance to our key terms
-                    relevant_links = []
-                    for link in links:
-                        relevance_score = sum(term.lower() in link.lower() for term in key_terms)
-                        if relevance_score > 0:
-                            relevant_links.append((link, relevance_score))
-                    
-                    # Sort by relevance score and process top 5 related articles
-                    relevant_links.sort(key=lambda x: x[1], reverse=True)
-                    for link, _ in relevant_links[:5]:
-                        if not should_continue_search():
-                            break
-                        process_article(link, depth + 1, max_depth)
-                        
-            except Exception as e:
-                return
-        
-        # Process main search results
+        # Process each search term
         for term in search_terms:
-            if not should_continue_search():
-                break
-                
+            search_progress.markdown(
+                f"🔍 Searching... (Articles processed: {processed_count})\n\n"
+                f"Currently trying: {term}\n\n"
+                f"Relevant articles found: {relevant_articles_found}"
+            )
+            
             try:
-                search_progress.markdown(f"🔍 Searching for: {term}")
-                search_results = wikipedia.search(term, results=5)
+                # Get initial search results
+                search_results = wikipedia.search(term, results=10)
+                
+                # For each potential article
                 for title in search_results:
-                    if not should_continue_search():
-                        break
-                    process_article(title)
+                    processed_count += 1
+                    
+                    if title in found_articles:
+                        continue
+                        
+                    try:
+                        page = wiki.page(title)
+                        if not page.exists():
+                            continue
+                            
+                        # Get content to validate
+                        content_to_validate = f"Title: {title}\n\nSummary: {page.summary}\n\nQuery Context: {query}"
+                        
+                        # Build validation prompt
+                        validation_prompt = f"""As a historical research expert, evaluate if this Wikipedia article is relevant to the query.
+
+Query: {query}
+
+Content to evaluate:
+{content_to_validate}
+
+Consider:
+1. Direct relevance to the query topic
+2. Time period accuracy
+3. Historical significance
+4. Contextual value
+
+Respond with a JSON object containing:
+{{
+    "is_relevant": boolean,
+    "relevance_score": float (0-1),
+    "key_points": [string] (list of relevant points from the article),
+    "suggested_sections": [string] (list of section titles that might contain relevant info)
+}}"""
+
+                        # Get AI validation
+                        if model_choice == "Deepseek (Requires API Key)":
+                            response = requests.post(
+                                'https://api.deepseek.com/v1/chat/completions',
+                                headers=headers,
+                                json={
+                                    'model': 'deepseek-chat',
+                                    'messages': [
+                                        {
+                                            'role': 'system',
+                                            'content': 'You are a historical research expert. Respond only with the requested JSON format.'
+                                        },
+                                        {
+                                            'role': 'user',
+                                            'content': validation_prompt
+                                        }
+                                    ],
+                                    'temperature': 0.1
+                                }
+                            )
+                            validation = json.loads(response.json()['choices'][0]['message']['content'])
+                        else:
+                            completion = client.chat.completions.create(
+                                model="mixtral-8x7b-32768",
+                                messages=[
+                                    {
+                                        "role": "system",
+                                        "content": "You are a historical research expert. Respond only with the requested JSON format."
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": validation_prompt
+                                    }
+                                ],
+                                temperature=0.1
+                            )
+                            validation = json.loads(completion.choices[0].message.content)
+                        
+                        # If article is relevant
+                        if validation['is_relevant']:
+                            relevant_articles_found += 1
+                            
+                            # Store article info
+                            found_articles[title] = {
+                                'summary': page.summary[:1000],
+                                'used_sections': [],
+                                'relevance': validation['relevance_score'],
+                                'key_points': validation['key_points']
+                            }
+                            
+                            # Add summary to content
+                            if page.summary not in seen_content:
+                                seen_content.add(page.summary)
+                                wiki_content.append(f"From article '{title}':\n{page.summary[:1000]}")
+                            
+                            # Check suggested sections
+                            for section_title in validation['suggested_sections']:
+                                if section_title in page.sections:
+                                    section_text = page.section_by_title(section_title)
+                                    if section_text and section_text not in seen_content:
+                                        seen_content.add(section_text)
+                                        wiki_content.append(f"Additional context from section '{section_title}':\n{section_text[:500]}")
+                                        found_articles[title]['used_sections'].append({
+                                            'name': section_title,
+                                            'content': section_text[:500]
+                                        })
+                            
+                            # If we have enough high-quality content, we can stop
+                            if relevant_articles_found >= 5 and all(data['relevance'] > 0.8 for data in found_articles.values()):
+                                break
+                                
+                    except Exception as e:
+                        continue
+                        
+                # If we have enough high-quality content, we can stop
+                if relevant_articles_found >= 5 and all(data['relevance'] > 0.8 for data in found_articles.values()):
+                    break
                     
             except Exception as e:
                 continue
         
-        search_duration = time.time() - start_time
+        # Show final stats
         search_progress.markdown(
             f"✅ Search complete!\n\n"
-            f"• Found {len(found_articles)} articles ({relevant_articles_found} relevant)\n"
+            f"• Found {len(found_articles)} relevant articles\n"
             f"• Processed {processed_count} total articles\n"
-            f"• Search took {search_duration:.1f} seconds"
+            f"• Average relevance score: {sum(data['relevance'] for data in found_articles.values()) / len(found_articles) if found_articles else 0:.2f}"
         )
-        time.sleep(2)  # Show completion message briefly
-        search_progress.empty()  # Clear the progress display
+        time.sleep(2)
+        search_progress.empty()
         
-        if wiki_content:
-            # Store found articles in session state for reference
+        if wiki_content and found_articles:
             st.session_state['last_wiki_articles'] = found_articles
             return "\n\n".join(wiki_content)
         return None
+        
     except Exception as e:
         st.error(f"Error searching Wikipedia: {str(e)}")
         return None
