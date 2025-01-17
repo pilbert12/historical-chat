@@ -613,13 +613,8 @@ def get_ai_response(prompt, wiki_content):
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
         
-        # Process importance markers first
-        main_response = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', main_response)
-        main_response = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', main_response)
-        main_response = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', main_response)
-        
-        # Remove any remaining brackets and their contents
-        main_response = re.sub(r'\[[^\]]*\]', '', main_response)  # Remove square brackets and contents
+        # Remove any remaining brackets and their contents (except importance markers)
+        main_response = re.sub(r'\[(?!\d\])\[?[^\]]*\]', '', main_response)  # Remove non-importance brackets
         main_response = re.sub(r'\([^)]*\)', '', main_response)   # Remove parentheses and contents
         main_response = re.sub(r'\{[^}]*\}', '', main_response)   # Remove curly braces and contents
         
