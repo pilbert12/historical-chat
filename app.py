@@ -100,8 +100,8 @@ nlp = load_spacy_model()
 def create_wiki_link(text, importance):
     """Create a Wikipedia link with proper styling based on importance."""
     clean_text = text.strip()
-    search_url = f"https://en.wikipedia.org/wiki/{clean_text.replace(' ', '_')}"
-    return f'<a href="{search_url}" data-importance="{importance}" target="_blank" style="color: inherit !important; text-decoration: none !important;">{clean_text}</a>'
+    search_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(clean_text.replace(' ', '_'))}"
+    return f'<a href="{search_url}" data-importance="{importance}" target="_blank" rel="noopener noreferrer" onclick="window.open(\'{search_url}\', \'_blank\'); return false;" style="color: inherit !important; text-decoration: none !important;">{clean_text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -110,10 +110,10 @@ def add_wiki_links(text):
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Process importance markers with non-greedy matching
-    text = re.sub(r'\[1\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
-    text = re.sub(r'\[2\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
-    text = re.sub(r'\[3\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
+    # Process importance markers with non-greedy matching and proper boundary handling
+    text = re.sub(r'\[1\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_wiki_link(m.group(1), 'important'), text)
+    text = re.sub(r'\[2\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
+    text = re.sub(r'\[3\]\[([^\]]+?)\](?=\s|$|[.,!?])', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
     
     # Clean up any remaining markers and whitespace
     text = re.sub(r'\[\d+\]', '', text)
@@ -660,13 +660,11 @@ def handle_chat():
                             st.session_state.messages.append({"role": "user", "content": suggestion})
                             st.rerun()
 
-# Chat input
+# Chat input and main chat loop
 if prompt := st.chat_input("What would you like to know about history?"):
     # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt, unsafe_allow_html=True)
-
+    
     # Show assistant response
     with st.chat_message("assistant"):
         with st.spinner("Searching Wikipedia and composing response..."):
@@ -678,19 +676,39 @@ if prompt := st.chat_input("What would you like to know about history?"):
                 response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
             
             st.session_state.messages.append({"role": "assistant", "content": response})
-            st.markdown(response, unsafe_allow_html=True)
+
+# Display chat history and handle suggestions
+for idx, message in enumerate(st.session_state.messages):
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"], unsafe_allow_html=True)
+        
+        # Only show suggestions after the most recent assistant message
+        if (message["role"] == "assistant" and 
+            idx == len(st.session_state.messages) - 1 and 
+            st.session_state.suggestions):
             
-            # Show suggestions if we have them
-            if st.session_state.suggestions:
-                cols = st.columns(3)
-                for idx, suggestion in enumerate(st.session_state.suggestions):
-                    if suggestion:  # Only create button if suggestion exists
-                        if cols[idx].button(
-                            suggestion,
-                            key=f"suggestion_{idx}_{len(st.session_state.messages)}",
-                            use_container_width=True,
-                            type="secondary"
-                        ):
-                            # Handle suggestion click
-                            st.session_state.messages.append({"role": "user", "content": suggestion})
-                            st.rerun() 
+            # Create columns for suggestions
+            cols = st.columns(3)
+            for i, suggestion in enumerate(st.session_state.suggestions):
+                if suggestion:  # Only create button if suggestion exists
+                    if cols[i].button(
+                        suggestion,
+                        key=f"suggestion_{i}_{idx}",
+                        use_container_width=True,
+                        type="secondary"
+                    ):
+                        # Add suggestion as user message and get AI response
+                        st.session_state.messages.append({"role": "user", "content": suggestion})
+                        
+                        # Get AI response for the suggestion
+                        with st.spinner("Searching Wikipedia and composing response..."):
+                            wiki_content = get_wikipedia_content(suggestion)
+                            
+                            if wiki_content:
+                                response = get_ai_response(suggestion, wiki_content)
+                            else:
+                                response = get_ai_response(suggestion, "No direct Wikipedia article found for this query.")
+                            
+                            st.session_state.messages.append({"role": "assistant", "content": response})
+                        
+                        st.rerun() 
