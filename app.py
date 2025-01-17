@@ -299,41 +299,13 @@ def get_groq_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
+            recent_messages = st.session_state.messages[-6:]  # Get last 6 messages
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
                 content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
+                content = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
-        
-        # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a historian specializing in providing accurate historical information. Your task is to answer the user's question using ONLY the Wikipedia content provided below. 
-
-IMPORTANT: 
-- Use ONLY information from the provided Wikipedia content
-- Do NOT include any external knowledge or assumptions
-- If the Wikipedia content doesn't fully answer the question, acknowledge what information you do have
-- Stay focused on the historical aspects of the topic
-
-Wikipedia Content:
-{wiki_content}
-
-Previous Conversation:
-{conversation_context}
-
-Current Question: {prompt}
-
-FORMAT YOUR RESPONSE:
-1. Mark important terms using these exact markers:
-   - [1][term] for major historical figures, events, and primary concepts
-   - [2][term] for dates, places, and technical terms
-   - [3][term] for supporting details
-   Example: The [1][Ottoman Empire] reached its peak under [1][Suleiman the Magnificent] in [2][1566].
-
-2. Write in a clear, natural style without section headers or numbering.
-
-3. End with three follow-up questions, each on a new line starting with [SUGGESTION]"""
 
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -343,14 +315,25 @@ FORMAT YOUR RESPONSE:
                     "content": """You are a historian specializing in providing accurate historical information. Your responses must:
 1. Use ONLY information from the provided Wikipedia content
 2. Stay focused on historical facts and developments
-3. Mark important terms with:
+3. Consider the conversation history and previous questions when relevant
+4. Mark important terms with:
    - [1][term] for major figures and events
    - [2][term] for dates and places
    - [3][term] for supporting details"""
                 },
                 {
                     "role": "user",
-                    "content": full_prompt
+                    "content": f"""Use ONLY the Wikipedia content below to answer this history question. Consider the conversation history for context.
+
+Wikipedia Content:
+{wiki_content}
+
+Previous Conversation:
+{conversation_context}
+
+Current Question: {prompt}
+
+Mark important terms with [1], [2], or [3] markers and end with three follow-up questions on new lines starting with [SUGGESTION]"""
                 }
             ],
             temperature=0.7,
