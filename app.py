@@ -36,6 +36,9 @@ def process_importance_markers(text):
     
     # Clean up any remaining formatting
     text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'\[\d+\]', '', text)  # Remove any remaining bracketed numbers
+    text = re.sub(r'\s*-\s*$', '', text)  # Remove trailing dashes
+    text = re.sub(r'\s+-\s+', ' ', text)  # Remove dashes between words
     
     # Load spacy model for NLP processing
     nlp = spacy.load('en_core_web_sm')
@@ -617,6 +620,9 @@ def get_ai_response(prompt, wiki_content):
         main_response = re.sub(r'Follow-up Questions:', '', main_response)
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        main_response = re.sub(r'\[\d+\]', '', main_response)  # Remove bracketed numbers
+        main_response = re.sub(r'\s*-\s*$', '', main_response)  # Remove trailing dashes
+        main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove dashes between words
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
