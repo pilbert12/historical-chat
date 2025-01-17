@@ -32,10 +32,20 @@ def process_importance_markers(text):
     # Clean up any existing formatting
     text = re.sub(r'<[^>]+>', '', text)
     
-    # Process importance markers
+    # Remove any trailing dashes or artifacts
+    text = re.sub(r'\s*-\s*$', '', text)
+    
+    # Clean up any numbered lists
+    text = re.sub(r'^\d+\.\s*', '', text, flags=re.MULTILINE)
+    
+    # Process importance markers with better spacing
     text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
     text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
     text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
+    
+    # Clean up extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
     
     return f'<div>{text}</div>'
 
@@ -191,116 +201,57 @@ def logout_user():
 # Add custom CSS for layout and styling
 st.markdown("""
 <style>
-    /* Header styling */
-    .stApp > header {
-        background-color: transparent;
-    }
-    
-    /* Title container */
-    h1:first-of-type {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        font-weight: 300;
-        letter-spacing: -0.5px;
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 2.8rem !important;
-        margin-bottom: 0.2rem;
-        line-height: 1.2;
-    }
-    
-    /* Subtitle styling */
-    .stApp > div:first-child > div:nth-child(2) p {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        margin-bottom: 3rem;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 1.1rem;
-        font-weight: 300;
+    /* Base text style */
+    .stChatMessage div.stMarkdown {
+        color: rgba(250, 250, 250, 0.65) !important;
+        line-height: 1.8;
+        font-size: 1.05rem;
         letter-spacing: 0.2px;
     }
-
-    /* Chat message icons */
-    .stChatMessage [data-testid="stChatMessageAvatar"] {
-        background: transparent !important;
-        padding: 0.5rem;
+    
+    /* Importance-based text styling */
+    .primary-term {
+        color: rgba(255, 255, 255, 1) !important;
+        font-weight: 600;
+        letter-spacing: 0.3px;
     }
-
-    /* User icon */
-    .stChatMessage.user [data-testid="stChatMessageAvatar"] {
-        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%) !important;
-        border-radius: 12px;
+    
+    .secondary-term {
+        color: rgba(255, 255, 255, 0.85) !important;
+        font-weight: 500;
     }
-
-    /* Assistant icon */
-    .stChatMessage.assistant [data-testid="stChatMessageAvatar"] {
-        background: linear-gradient(135deg, #FFB86C 0%, #FFD93D 100%) !important;
-        border-radius: 12px;
+    
+    .tertiary-term {
+        color: rgba(255, 255, 255, 0.75) !important;
+        font-style: normal;
+        font-weight: 400;
     }
-
+    
     /* Chat message container */
     .stChatMessage {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 1.5rem;
+        padding: 1.75rem;
         margin: 1rem 0;
         transition: all 0.2s ease-in-out;
     }
-
-    .stChatMessage:hover {
-        background: rgba(255, 255, 255, 0.07);
-        border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    /* Main content width */
-    .stApp > div:first-child {
-        max-width: 1200px !important;
-        padding-left: 5rem;
-        padding-right: 5rem;
+    
+    /* Follow-up questions section */
+    .stChatMessage .stMarkdown p {
+        margin-bottom: 1.25rem;
     }
     
-    /* Base text style */
-    .stChatMessage div.stMarkdown {
-        color: rgba(250, 250, 250, 0.7) !important;
-        line-height: 1.7;
-        font-size: 1rem;
-        max-width: 100% !important;
+    .stChatMessage hr {
+        margin: 2rem 0 1.5rem;
+        border-color: rgba(255, 255, 255, 0.1);
     }
     
-    /* Make chat messages wider */
-    .stChatMessage {
-        max-width: 100% !important;
-    }
-    
-    .stChatMessage > div {
-        max-width: 100% !important;
-    }
-
-    /* Importance-based text styling */
-    .primary-term {
-        color: rgba(255, 255, 255, 0.95) !important;
-        font-weight: 500;
-    }
-    
-    .secondary-term {
-        color: rgba(255, 255, 255, 0.85) !important;
-    }
-    
-    .tertiary-term {
-        color: rgba(255, 255, 255, 0.75) !important;
-        font-style: italic;
-    }
-    
-    /* Style the buttons container */
-    div[data-testid="column"] > div {
-        display: flex;
-        justify-content: center;
-        margin-top: 1.5rem;
-    }
-    
-    /* Style the buttons */
+    /* Buttons styling */
     div[data-testid="column"] button {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(255, 255, 255, 0.8);
         transition: all 0.2s ease-in-out;
         min-height: unset;
         padding: 0.75rem 1.25rem;
@@ -308,66 +259,8 @@ st.markdown("""
         flex: 1;
         border-radius: 8px;
         font-size: 0.95rem;
-    }
-    
-    div[data-testid="column"] button:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.9);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    /* Follow-up questions section */
-    .follow-up-questions {
-        margin-top: 1.5rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .follow-up-questions h4 {
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 0.9rem;
-        font-weight: 400;
-        margin-bottom: 1rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    /* Play button styling */
-    .play-button-container {
-        position: absolute;
-        top: 1rem;
-        right: 1.5rem;
-        z-index: 100;
-    }
-    
-    .play-button {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
-        padding: 0;
-    }
-    
-    .play-button:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.3);
-    }
-    
-    .play-button svg {
-        width: 16px;
-        height: 16px;
-        fill: rgba(255, 255, 255, 0.8);
-    }
-    
-    /* Make chat messages have relative positioning for play button */
-    .stChatMessage {
-        position: relative !important;
+        line-height: 1.4;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
