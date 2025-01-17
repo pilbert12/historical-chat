@@ -23,88 +23,6 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 # Add custom CSS
 st.markdown("""
 <style>
-    /* Header styling */
-    .stApp > header {
-        background-color: transparent;
-    }
-    
-    /* Title container */
-    h1:first-of-type {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        font-weight: 300;
-        letter-spacing: -0.5px;
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 2.8rem !important;
-        margin-bottom: 0.2rem;
-        line-height: 1.2;
-    }
-    
-    /* Subtitle styling */
-    .stApp > div:first-child > div:nth-child(2) p {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        margin-bottom: 3rem;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 1.1rem;
-        font-weight: 300;
-        letter-spacing: 0.2px;
-    }
-
-    /* Chat message icons */
-    .stChatMessage [data-testid="stChatMessageAvatar"] {
-        background: transparent !important;
-        padding: 0.5rem;
-    }
-
-    /* User icon */
-    .stChatMessage.user [data-testid="stChatMessageAvatar"] {
-        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%) !important;
-        border-radius: 12px;
-    }
-
-    /* Assistant icon */
-    .stChatMessage.assistant [data-testid="stChatMessageAvatar"] {
-        background: linear-gradient(135deg, #FFB86C 0%, #FFD93D 100%) !important;
-        border-radius: 12px;
-    }
-
-    /* Chat message container */
-    .stChatMessage {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1rem;
-        margin: 1rem 0;
-        transition: all 0.2s ease-in-out;
-    }
-
-    .stChatMessage:hover {
-        background: rgba(255, 255, 255, 0.07);
-        border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    /* Main content width */
-    .stApp > div:first-child {
-        max-width: 1200px !important;
-        padding-left: 5rem;
-        padding-right: 5rem;
-    }
-    
-    /* Base text style */
-    .stChatMessage div.stMarkdown {
-        color: rgba(250, 250, 250, 0.6) !important;
-        line-height: 1.6;
-        max-width: 100% !important;
-    }
-    
-    /* Make chat messages wider */
-    .stChatMessage {
-        max-width: 100% !important;
-    }
-    
-    .stChatMessage > div {
-        max-width: 100% !important;
-    }
-
     /* Link styling */
     .stChatMessage div.stMarkdown a {
         color: inherit !important;
@@ -133,85 +51,26 @@ st.markdown("""
         border-radius: 3px;
     }
     
-    /* Style the buttons container */
-    div[data-testid="column"] > div {
-        display: flex;
-        justify-content: center;
-        margin-top: 1.5rem;
-    }
-    
-    /* Style the buttons */
-    div[data-testid="column"] button {
+    /* Chat message styling */
+    .stChatMessage {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.75);
-        transition: all 0.2s ease-in-out;
-        min-height: unset;
-        padding: 0.5rem 1rem;
-        width: auto !important;
-        flex: 1;
-        border-radius: 8px;
-    }
-    
-    div[data-testid="column"] button:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.9);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    /* Sources section styling */
-    details {
+        border-radius: 16px;
+        padding: 1rem;
+        margin: 1rem 0;
         transition: all 0.2s ease-in-out;
     }
     
-    details summary {
-        list-style: none;
-        display: flex;
-        align-items: center;
+    .stChatMessage:hover {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: rgba(255, 255, 255, 0.15);
     }
     
-    details summary::-webkit-details-marker {
-        display: none;
-    }
-    
-    details summary::before {
-        content: "▶";
-        margin-right: 0.5rem;
-        transition: transform 0.2s ease-in-out;
-        font-size: 0.8em;
-        color: rgba(255, 255, 255, 0.6);
-    }
-    
-    details[open] summary::before {
-        transform: rotate(90deg);
-    }
-    
-    details summary:hover {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    /* Scrollbar styling for sources content */
-    details > div {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
-    }
-    
-    details > div::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    details > div::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
-    }
-    
-    details > div::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-    }
-    
-    details > div::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+    /* Base text style */
+    .stChatMessage div.stMarkdown {
+        color: rgba(250, 250, 250, 0.6) !important;
+        line-height: 1.6;
+        max-width: 100% !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -238,12 +97,8 @@ nlp = load_spacy_model()
 
 def create_wiki_link(text, importance):
     """Create a Wikipedia link with proper styling based on importance."""
-    # Clean up the text and create a proper search URL
-    clean_text = text.strip()
-    search_url = f"https://en.wikipedia.org/wiki/{clean_text.replace(' ', '_')}"
-    
-    # Return properly formatted HTML with data-importance attribute
-    return f'<a href="{search_url}" data-importance="{importance}">{clean_text}</a>'
+    search_url = f"https://en.wikipedia.org/wiki/{text.replace(' ', '_')}"
+    return f'<a href="{search_url}" data-importance="{importance}">{text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -252,7 +107,7 @@ def add_wiki_links(text):
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Process importance markers first
+    # Process importance markers
     text = re.sub(r'\[1\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
     text = re.sub(r'\[2\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
     text = re.sub(r'\[3\]\[([^\]]+)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
