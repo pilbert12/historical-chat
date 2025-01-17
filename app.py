@@ -359,6 +359,40 @@ def validate_wiki_content(text, title):
     except Exception as e:
         return True  # Accept content if validation fails
 
+def process_article(title, wiki_content, found_articles):
+    """Process a Wikipedia article and add it to found_articles if relevant."""
+    try:
+        # Get article content
+        page = wikipedia.page(title, auto_suggest=False)
+        
+        # Get summary and validate
+        summary = page.summary
+        if validate_wiki_content(summary, title):
+            # Initialize article data
+            found_articles[title] = {
+                'summary': summary,
+                'used_sections': []
+            }
+            
+            # Add summary to wiki_content with relevance score
+            wiki_content.append((summary, 5))  # Summary gets base score of 5
+            
+            # Process sections
+            for section in page.sections:
+                try:
+                    section_content = page.section(section)
+                    if section_content and validate_wiki_content(section_content, section):
+                        found_articles[title]['used_sections'].append({
+                            'name': section,
+                            'content': section_content
+                        })
+                        wiki_content.append((section_content, 3))  # Sections get base score of 3
+                except:
+                    continue
+                    
+    except Exception as e:
+        pass  # Skip articles that can't be processed
+
 def get_wikipedia_content(query):
     """Search Wikipedia and get content for the query."""
     try:
@@ -378,6 +412,7 @@ def get_wikipedia_content(query):
                     years.add(year_match.group(0))
         
         # Build search terms with historical context
+        global key_terms
         key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
         search_progress.markdown("📚 Building search strategy...")
         
@@ -410,7 +445,6 @@ def get_wikipedia_content(query):
         wiki_content = []
         seen_content = set()
         found_articles = {}
-        processed_count = 0
         total_content_found = 0
         
         for term in search_terms:
@@ -419,7 +453,7 @@ def get_wikipedia_content(query):
                 search_results = wikipedia.search(term, results=8)
                 for title in search_results:
                     if title not in found_articles:  # Only process new articles
-                        process_article(title)
+                        process_article(title, wiki_content, found_articles)
                         if title in found_articles:  # If article was added
                             total_content_found += 1
                     
