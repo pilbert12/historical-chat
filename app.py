@@ -559,7 +559,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             for level in range(1, 4):
                 main_response = re.sub(
                     f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance=\'{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}\'>{m.group(1)}</a>',
+                    lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}">{m.group(1)}</a>',
                     main_response
                 )
             
@@ -570,7 +570,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             # Store suggestions in session state
             st.session_state.suggestions = suggestions
             
-            return f'<div>{main_response}</div>'
+            return main_response
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
@@ -651,7 +651,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         for level in range(1, 4):
             main_response = re.sub(
                 f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance=\'{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}\'>{m.group(1)}</a>',
+                lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}">{m.group(1)}</a>',
                 main_response
             )
         
@@ -662,7 +662,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         # Store suggestions in session state
         st.session_state.suggestions = suggestions
         
-        return f'<div>{main_response}</div>'
+        return main_response
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
@@ -815,7 +815,7 @@ for idx, message in enumerate(st.session_state.messages):
                     st.audio(audio_bytes, format='audio/mp3')
             
             with cols[0]:
-                st.markdown(message["content"], unsafe_allow_html=True)
+                st.markdown(f'<div>{message["content"]}</div>', unsafe_allow_html=True)
         else:
             st.markdown(message["content"], unsafe_allow_html=True)
         
