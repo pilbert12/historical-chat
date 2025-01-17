@@ -1240,3 +1240,38 @@ Respond with ONLY a JSON array of search terms. Example:
         
     except Exception as e:
         return None 
+
+def check_api_key(model_choice):
+    """Check if the appropriate API key is available for the selected model."""
+    if model_choice == "Deepseek (Requires API Key)":
+        api_key = st.session_state.get('DEEPSEEK_API_KEY')
+        if not api_key:
+            st.error("Please enter your Deepseek API key in the sidebar to use AI-powered search.")
+            return False
+    else:  # Groq
+        api_key = st.session_state.get('GROQ_API_KEY')
+        if not api_key:
+            st.error("Please enter your Groq API key in the sidebar to use AI-powered search.")
+            return False
+    return True
+
+def get_default_search_terms(query):
+    """Generate default search terms if AI generation fails."""
+    default_terms = [
+        query,  # Exact query
+        query + " history",  # Historical context
+        query + " impact",  # Impact/significance
+        query + " background",  # Historical background
+        query + " effects",  # Effects/consequences
+        query + " significance",  # Historical significance
+        query + " period",  # Time period
+        query + " era",  # Historical era
+        query + " influence",  # Influence
+        query + " development",  # Development
+        query + " origins",  # Origins
+        query + " consequences",  # Consequences
+        query + " analysis",  # Analysis
+        query + " historical context",  # Historical context
+        query + " timeline"  # Timeline
+    ]
+    return [term for term in default_terms if term]  # Remove empty terms 
