@@ -1089,3 +1089,112 @@ if prompt := st.chat_input("What would you like to know about history?"):
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun() 
+
+def get_ai_search_terms(query, model_choice):
+    """Generate intelligent search terms using AI."""
+    try:
+        # Build search strategy prompt
+        strategy_prompt = f"""As a historical research assistant, analyze this query and develop a comprehensive search strategy.
+
+Query: {query}
+
+Create a search strategy that will help find relevant Wikipedia articles. Consider:
+1. Key historical figures, events, and concepts
+2. Relevant time periods and locations
+3. Related historical contexts and themes
+4. Alternative names or terms that might be used
+5. Broader historical context and related topics
+
+For example, for "Who were the top figures in China in 1678":
+- "China Qing Dynasty 1678"
+- "Kangxi Emperor 1678"
+- "Chinese government officials 1678"
+- "Chinese military leaders 1678"
+- "Chinese scholars 1678"
+- "Important Chinese people 17th century"
+- "China history 1670s"
+- "Qing Dynasty politics"
+- "Chinese imperial court"
+- "Chinese civil service system"
+
+Respond with ONLY a JSON array of search terms, ordered from most specific to most general. Include at least 10 variations."""
+
+        # Get AI-generated search strategy
+        if model_choice == "Deepseek (Requires API Key)":
+            api_key = st.session_state.get('DEEPSEEK_API_KEY')
+            if not api_key:
+                return None
+                
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers=headers,
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': [
+                        {
+                            'role': 'system',
+                            'content': 'You are a historical research assistant. Generate a diverse set of search terms, from specific to general. Respond only with a JSON array.'
+                        },
+                        {
+                            'role': 'user',
+                            'content': strategy_prompt
+                        }
+                    ],
+                    'temperature': 0.7
+                },
+                timeout=10  # 10 second timeout
+            )
+            search_terms = json.loads(response.json()['choices'][0]['message']['content'])
+            
+        else:
+            api_key = st.session_state.get('GROQ_API_KEY')
+            if not api_key:
+                return None
+                
+            client = Groq(api_key=api_key)
+            
+            completion = client.chat.completions.create(
+                model="mixtral-8x7b-32768",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a historical research assistant. Generate a diverse set of search terms, from specific to general. Respond only with a JSON array."
+                    },
+                    {
+                        "role": "user",
+                        "content": strategy_prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=500,
+                top_p=1,
+                request_timeout=10  # 10 second timeout
+            )
+            
+            search_terms = json.loads(completion.choices[0].message.content)
+        
+        # Validate and clean up search terms
+        if not isinstance(search_terms, list):
+            raise ValueError("AI did not return a list of search terms")
+            
+        # Remove any empty or non-string terms
+        search_terms = [str(term).strip() for term in search_terms if term and isinstance(term, (str, int, float))]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        search_terms = [x for x in search_terms if not (x.lower() in seen or seen.add(x.lower()))]
+        
+        # Ensure we have at least some terms
+        if not search_terms:
+            raise ValueError("No valid search terms generated")
+            
+        return search_terms
+        
+    except Exception as e:
+        st.error(f"Error generating search terms: {str(e)}")
+        return None 
