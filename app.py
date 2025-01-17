@@ -379,6 +379,12 @@ def get_wikipedia_content(query):
         key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
         search_progress.markdown("📚 Building search strategy...")
         
+        # Track search metrics
+        total_articles_found = 0
+        relevant_articles_found = 0
+        max_search_time = 30  # Maximum search time in seconds
+        start_time = time.time()
+        
         # Generate broader search terms
         search_terms = []
         
@@ -432,15 +438,40 @@ def get_wikipedia_content(query):
         found_articles = {}  # Track which articles contributed what content
         processed_count = 0
         
-        def process_article(title, depth=0, max_depth=3):  # Increased depth to 3
+        def should_continue_search():
+            """Determine if the search should continue based on various metrics."""
+            current_time = time.time()
+            search_duration = current_time - start_time
+            
+            # Stop conditions:
+            # 1. Exceeded max search time
+            if search_duration > max_search_time:
+                return False
+                
+            # 2. Found enough high-quality articles
+            if len(found_articles) >= 20 and relevant_articles_found >= 10:
+                return False
+                
+            # 3. Processed too many articles with diminishing returns
+            if processed_count > 200:
+                return False
+                
+            return True
+        
+        def process_article(title, depth=0, max_depth=2):
             """Process an article and its related links up to max_depth."""
-            nonlocal processed_count
-            if depth > max_depth or title in found_articles:
+            nonlocal processed_count, relevant_articles_found
+            
+            if not should_continue_search() or depth > max_depth or title in found_articles:
                 return
             
             try:
                 processed_count += 1
-                search_progress.markdown(f"🔍 Searching... (Articles processed: {processed_count})\n\nCurrently analyzing: {title}")
+                search_progress.markdown(
+                    f"🔍 Searching... (Articles processed: {processed_count})\n\n"
+                    f"Currently analyzing: {title}\n\n"
+                    f"Relevant articles found: {relevant_articles_found}"
+                )
                 
                 page = wiki.page(title)
                 if not page.exists():
@@ -460,6 +491,8 @@ def get_wikipedia_content(query):
                     'relevance': 'primary' if depth == 0 else 'related'
                 }
                 
+                relevant_articles_found += 1
+                
                 # Add summary if unique
                 if summary not in seen_content:
                     seen_content.add(summary)
@@ -467,7 +500,7 @@ def get_wikipedia_content(query):
                     
                 # Look for relevant sections
                 sections = page.sections
-                if sections:
+                if sections and should_continue_search():
                     relevant_sections = []
                     for section in sections:
                         section_text = page.section_by_title(section)
@@ -479,6 +512,8 @@ def get_wikipedia_content(query):
                     
                     # Take top 5 most relevant sections
                     for section, section_text in relevant_sections[:5]:
+                        if not should_continue_search():
+                            break
                         section_summary = section_text[:500]
                         if section_summary not in seen_content:
                             seen_content.add(section_summary)
@@ -489,7 +524,7 @@ def get_wikipedia_content(query):
                             })
                 
                 # If this is not too deep, follow links to related articles
-                if depth < max_depth:
+                if depth < max_depth and should_continue_search():
                     # Get links from the page
                     links = page.links
                     # Sort links by relevance to our key terms
@@ -499,9 +534,11 @@ def get_wikipedia_content(query):
                         if relevance_score > 0:
                             relevant_links.append((link, relevance_score))
                     
-                    # Sort by relevance score and process top 8 related articles
+                    # Sort by relevance score and process top 5 related articles
                     relevant_links.sort(key=lambda x: x[1], reverse=True)
-                    for link, _ in relevant_links[:8]:  # Increased from 5 to 8
+                    for link, _ in relevant_links[:5]:
+                        if not should_continue_search():
+                            break
                         process_article(link, depth + 1, max_depth)
                         
             except Exception as e:
@@ -509,20 +546,27 @@ def get_wikipedia_content(query):
         
         # Process main search results
         for term in search_terms:
+            if not should_continue_search():
+                break
+                
             try:
                 search_progress.markdown(f"🔍 Searching for: {term}")
-                # Increased from 5 to 8 initial search results
-                search_results = wikipedia.search(term, results=8)
+                search_results = wikipedia.search(term, results=5)
                 for title in search_results:
+                    if not should_continue_search():
+                        break
                     process_article(title)
-                    
-                if len(found_articles) >= 20:  # Increased minimum articles to 20
-                    break
                     
             except Exception as e:
                 continue
         
-        search_progress.markdown(f"✅ Search complete! Found {len(found_articles)} relevant articles.")
+        search_duration = time.time() - start_time
+        search_progress.markdown(
+            f"✅ Search complete!\n\n"
+            f"• Found {len(found_articles)} articles ({relevant_articles_found} relevant)\n"
+            f"• Processed {processed_count} total articles\n"
+            f"• Search took {search_duration:.1f} seconds"
+        )
         time.sleep(2)  # Show completion message briefly
         search_progress.empty()  # Clear the progress display
         
