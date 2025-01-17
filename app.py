@@ -276,12 +276,13 @@ def process_suggestions(response_text):
     lines = response_text.split('\n')
     
     for line in lines:
-        if line.strip().startswith('[SUGGESTION]'):
+        if '[SUGGESTION]' in line:
             # Clean up the suggestion text
-            suggestion = line.replace('[SUGGESTION]', '').strip()
+            suggestion = line[line.find('[SUGGESTION]') + 12:].strip()
+            # Remove any importance markers
             suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
-            suggestion = re.sub(r'\s+', ' ', suggestion)
-            if suggestion:
+            suggestion = re.sub(r'\s+', ' ', suggestion).strip()
+            if suggestion and len(suggestions) < 3:  # Only take first 3 valid suggestions
                 suggestions.append(suggestion)
     
     return suggestions
@@ -303,7 +304,6 @@ def get_groq_response(prompt, wiki_content):
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
-                # Fix the regex pattern to avoid invalid group reference
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', lambda m: m.group(2), content)
                 conversation_context += f"{role}: {content}\n"
@@ -316,15 +316,15 @@ def get_groq_response(prompt, wiki_content):
                     "content": """You are a historian specializing in providing accurate historical information. Your responses must:
 1. Use ONLY information from the provided Wikipedia content
 2. Stay focused on historical facts and developments
-3. Consider the conversation history and previous questions when relevant
-4. Mark important terms with:
+3. Mark important terms with:
    - [1][term] for major figures and events
    - [2][term] for dates and places
-   - [3][term] for supporting details"""
+   - [3][term] for supporting details
+4. End with exactly three follow-up questions, each on its own line starting with [SUGGESTION]"""
                 },
                 {
                     "role": "user",
-                    "content": f"""Use ONLY the Wikipedia content below to answer this history question. Consider the conversation history for context.
+                    "content": f"""Use ONLY the Wikipedia content below to answer this history question.
 
 Wikipedia Content:
 {wiki_content}
@@ -332,9 +332,7 @@ Wikipedia Content:
 Previous Conversation:
 {conversation_context}
 
-Current Question: {prompt}
-
-Mark important terms with [1], [2], or [3] markers and end with three follow-up questions on new lines starting with [SUGGESTION]"""
+Current Question: {prompt}"""
                 }
             ],
             temperature=0.7,
@@ -345,54 +343,20 @@ Mark important terms with [1], [2], or [3] markers and end with three follow-up 
         
         response_text = completion.choices[0].message.content.strip()
         
-        # Split response and extract suggestions
-        parts = response_text.split('\n')
-        main_response = []
-        suggestions = []
+        # Extract suggestions
+        suggestions = process_suggestions(response_text)
         
-        # Process each line
-        for part in parts:
-            if part.strip().startswith('[SUGGESTION]'):
-                suggestion = part.replace('[SUGGESTION]', '').strip()
-                suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
-                suggestion = re.sub(r'\s+', ' ', suggestion)
-                if suggestion:
-                    suggestions.append(suggestion)
-            else:
-                main_response.append(part)
-        
-        main_response = ' '.join(main_response).strip()
-        
-        # Store suggestions in session state
+        # Store exactly 3 suggestions
         st.session_state.suggestions = suggestions[:3]
         
-        # If we don't have enough suggestions, generate some based on found articles
-        if len(st.session_state.suggestions) < 3 and 'last_wiki_articles' in st.session_state:
-            article_titles = list(st.session_state['last_wiki_articles'].keys())
-            while len(st.session_state.suggestions) < 3 and article_titles:
-                title = random.choice(article_titles)
-                suggestion = f"Tell me more about {title}"
-                if suggestion not in st.session_state.suggestions:
-                    st.session_state.suggestions.append(suggestion)
-                article_titles.remove(title)
+        # If we don't have enough suggestions, add generic ones based on the topic
+        while len(st.session_state.suggestions) < 3:
+            generic = f"What other aspects of {prompt} would you like to explore?"
+            if generic not in st.session_state.suggestions:
+                st.session_state.suggestions.append(generic)
         
-        # If still not enough suggestions, add a generic one
-        if len(st.session_state.suggestions) < 3:
-            st.session_state.suggestions.append("What other historical events were significant during this period?")
-        
-        # Clean up formatting artifacts
-        main_response = re.sub(r'PART \d:', '', main_response)
-        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-        main_response = re.sub(r'\d\. ', '', main_response)
-        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-        
-        # Process URLs
-        main_response = re.sub(r'https?://\S+', '', main_response)
-        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-        
-        # Clean up extra spaces and normalize whitespace
-        main_response = re.sub(r'\s+', ' ', main_response)
-        main_response = main_response.strip()
+        # Clean up the main response
+        main_response = re.sub(r'\[SUGGESTION\].*$', '', response_text, flags=re.MULTILINE).strip()
         
         # Let add_wiki_links handle the importance markers
         return add_wiki_links(main_response)
