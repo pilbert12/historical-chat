@@ -368,7 +368,22 @@ def get_wikipedia_content(query):
         seen_content = set()
         found_articles = {}  # Track which articles contributed what content
         
-        def process_article(title, depth=0, max_depth=1):
+        def validate_wiki_content(text, title):
+            """Validate that the Wikipedia content is relevant to the query."""
+            # Extract key terms from the content
+            doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
+            content_entities = set([ent.text.lower() for ent in doc.ents])
+            
+            # Calculate relevance score based on key term matches
+            relevance_score = sum(term.lower() in text.lower() for term in key_terms)
+            entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
+            
+            # Content must have either:
+            # 1. Multiple key term matches
+            # 2. At least one key term match and related entities
+            return relevance_score > 1 or (relevance_score > 0 and entity_overlap > 0)
+        
+        def process_article(title, depth=0, max_depth=2):
             """Process an article and its related links up to max_depth."""
             if depth > max_depth or title in found_articles:
                 return
@@ -381,8 +396,8 @@ def get_wikipedia_content(query):
                 # Get summary and check relevance
                 summary = page.summary
                 
-                # Check if the summary contains any of our key terms
-                if not any(term.lower() in summary.lower() for term in key_terms):
+                # Validate summary content
+                if not validate_wiki_content(summary, title):
                     return
                     
                 # Track what content we're using from this article
@@ -403,14 +418,14 @@ def get_wikipedia_content(query):
                     relevant_sections = []
                     for section in sections:
                         section_text = page.section_by_title(section)
-                        if len(section_text) > 100 and any(term.lower() in section_text.lower() for term in key_terms):
+                        if len(section_text) > 100 and validate_wiki_content(section_text, title):
                             relevant_sections.append((section, section_text))
                     
                     # Sort sections by relevance (number of key term matches)
                     relevant_sections.sort(key=lambda x: sum(term.lower() in x[1].lower() for term in key_terms), reverse=True)
                     
-                    # Take top 3 most relevant sections
-                    for section, section_text in relevant_sections[:3]:
+                    # Take top 5 most relevant sections
+                    for section, section_text in relevant_sections[:5]:
                         section_summary = section_text[:500]
                         if section_summary not in seen_content:
                             seen_content.add(section_summary)
@@ -420,8 +435,8 @@ def get_wikipedia_content(query):
                                 'content': section_summary
                             })
                 
-                # If this is the primary article, follow links to related articles
-                if depth == 0:
+                # If this is not too deep, follow links to related articles
+                if depth < max_depth:
                     # Get links from the page
                     links = page.links
                     # Sort links by relevance to our key terms
@@ -431,9 +446,9 @@ def get_wikipedia_content(query):
                         if relevance_score > 0:
                             relevant_links.append((link, relevance_score))
                     
-                    # Sort by relevance score and process top 3 related articles
+                    # Sort by relevance score and process top 5 related articles
                     relevant_links.sort(key=lambda x: x[1], reverse=True)
-                    for link, _ in relevant_links[:3]:
+                    for link, _ in relevant_links[:5]:
                         process_article(link, depth + 1, max_depth)
                         
             except Exception as e:
@@ -442,11 +457,12 @@ def get_wikipedia_content(query):
         # Process main search results
         for term in search_terms:
             try:
-                search_results = wikipedia.search(term, results=3)
+                # Increased from 3 to 5 initial search results
+                search_results = wikipedia.search(term, results=5)
                 for title in search_results:
                     process_article(title)
                     
-                if found_articles:  # If we found relevant articles, no need to keep searching
+                if len(found_articles) >= 5:  # Only stop if we have at least 5 relevant articles
                     break
                     
             except Exception as e:
@@ -481,31 +497,35 @@ def get_deepseek_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            # Get last few exchanges, but limit to keep context manageable
-            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
+            recent_messages = st.session_state.messages[-6:]
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
-                # Clean up any HTML/markdown from previous responses
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""Context from Wikipedia: {wiki_content}
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
+
+Wikipedia Content:
+{wiki_content}
+
+Previous Conversation:
 {conversation_context}
+
 Current Question: {prompt}
 
-Respond in two parts:
+REQUIREMENTS:
+1. Use ONLY information from the provided Wikipedia content
+2. Mark important terms using these exact markers:
+   - Use [1][term] for major historical figures, key events, and primary concepts
+   - Use [2][term] for dates, places, and technical terms
+   - Use [3][term] for supporting concepts and contextual details
+3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
+4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts
-- [2][term] for dates, places, technical terms
-- [3][term] for related concepts and supporting details
-
-PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
-
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
+Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
 
         try:
             response = requests.post(
@@ -513,7 +533,19 @@ Keep the response natural and flowing, without section headers or numbering. Mar
                 headers=headers,
                 json={
                     'model': 'deepseek-chat',
-                    'messages': [{'role': 'user', 'content': full_prompt}]
+                    'messages': [
+                        {
+                            'role': 'system',
+                            'content': """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
+- [1][term] for major figures and primary concepts
+- [2][term] for dates, places, and technical terms
+- [3][term] for supporting details"""
+                        },
+                        {
+                            'role': 'user',
+                            'content': full_prompt
+                        }
+                    ]
                 }
             )
             response_text = response.json()['choices'][0]['message']['content']
@@ -579,29 +611,23 @@ def get_groq_response(prompt, wiki_content):
                 conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response about the following topic, with careful attention to marking important terms.
+        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
 
-Context from Wikipedia: {wiki_content}
+Wikipedia Content:
+{wiki_content}
+
+Previous Conversation:
 {conversation_context}
+
 Current Question: {prompt}
 
-CRITICAL FORMATTING REQUIREMENTS:
-1. You MUST mark ALL important terms using these exact markers:
-   - Use [1][term] for major historical figures (e.g., [1][Julius Caesar]), key events (e.g., [1][Battle of Waterloo]), and primary concepts
-   - Use [2][term] for dates (e.g., [2][44 BC]), places (e.g., [2][Roman Empire]), and technical terms
+REQUIREMENTS:
+1. Use ONLY information from the provided Wikipedia content
+2. Mark important terms using these exact markers:
+   - Use [1][term] for major historical figures, key events, and primary concepts
+   - Use [2][term] for dates, places, and technical terms
    - Use [3][term] for supporting concepts and contextual details
-
-2. Example of properly marked text:
-"[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics] during the campaign."
-
-3. Follow these marking rules strictly:
-   - Mark EVERY important term - aim for at least 2-3 terms per sentence
-   - Use [1] for the most important 25% of terms
-   - Use [2] for the next 50% of terms
-   - Use [3] for the remaining 25% of terms
-   - Never mark the same term twice
-   - Always include the full term in the brackets
-
+3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
 4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
 
 Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
@@ -611,11 +637,10 @@ Keep your response natural and flowing, without section headers or numbering. Fo
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a knowledgeable historical chatbot. Your primary task is to mark important terms with the correct importance level:
-- [1][term] for major figures and primary concepts (25% of terms)
-- [2][term] for dates, places, and technical terms (50% of terms)
-- [3][term] for supporting details (25% of terms)
-Mark EVERY important term, and ensure proper hierarchy through your marking."""
+                    "content": """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Never include information from outside the provided sources. Mark important terms with:
+- [1][term] for major figures and primary concepts
+- [2][term] for dates, places, and technical terms
+- [3][term] for supporting details"""
                 },
                 {
                     "role": "user",
