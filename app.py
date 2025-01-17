@@ -815,16 +815,35 @@ def handle_chat():
 
 # Chat input
 if prompt := st.chat_input("What would you like to know about history?"):
+    # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt, unsafe_allow_html=True)
 
-    wiki_content = get_wikipedia_content(prompt)
-    
-    if wiki_content:
-        response = get_ai_response(prompt, wiki_content)
-    else:
-        response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    st.rerun() 
+    # Show assistant response
+    with st.chat_message("assistant"):
+        with st.spinner("Searching Wikipedia and composing response..."):
+            wiki_content = get_wikipedia_content(prompt)
+            
+            if wiki_content:
+                response = get_ai_response(prompt, wiki_content)
+            else:
+                response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
+            
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.markdown(response, unsafe_allow_html=True)
+            
+            # Show suggestions if we have them
+            if st.session_state.suggestions:
+                cols = st.columns(3)
+                for idx, suggestion in enumerate(st.session_state.suggestions):
+                    if suggestion:  # Only create button if suggestion exists
+                        if cols[idx].button(
+                            suggestion,
+                            key=f"suggestion_{idx}_{len(st.session_state.messages)}",
+                            use_container_width=True,
+                            type="secondary"
+                        ):
+                            # Handle suggestion click
+                            st.session_state.messages.append({"role": "user", "content": suggestion})
+                            st.rerun() 
