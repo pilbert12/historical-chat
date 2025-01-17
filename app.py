@@ -24,7 +24,7 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 st.markdown("""
 <style>
     /* Link styling */
-    .stChatMessage div.stMarkdown a {
+    div.stChatMessage div.stMarkdown a {
         color: inherit !important;
         text-decoration: none !important;
         cursor: pointer;
@@ -32,27 +32,27 @@ st.markdown("""
     }
     
     /* Importance-based text styling */
-    .stChatMessage div.stMarkdown a[data-importance="important"] {
+    div.stChatMessage div.stMarkdown a[data-importance="important"] {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .stChatMessage div.stMarkdown a[data-importance="secondary"] {
+    div.stChatMessage div.stMarkdown a[data-importance="secondary"] {
         color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    .stChatMessage div.stMarkdown a[data-importance="tertiary"] {
+    div.stChatMessage div.stMarkdown a[data-importance="tertiary"] {
         color: rgba(255, 255, 255, 0.75) !important;
     }
     
     /* Subtle hover effect for links */
-    .stChatMessage div.stMarkdown a:hover {
+    div.stChatMessage div.stMarkdown a:hover {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
     }
     
     /* Chat message styling */
-    .stChatMessage {
+    div.stChatMessage {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
@@ -61,13 +61,13 @@ st.markdown("""
         transition: all 0.2s ease-in-out;
     }
     
-    .stChatMessage:hover {
+    div.stChatMessage:hover {
         background: rgba(255, 255, 255, 0.07);
         border-color: rgba(255, 255, 255, 0.15);
     }
     
     /* Base text style */
-    .stChatMessage div.stMarkdown {
+    div.stChatMessage div.stMarkdown {
         color: rgba(250, 250, 250, 0.6) !important;
         line-height: 1.6;
         max-width: 100% !important;
@@ -97,8 +97,9 @@ nlp = load_spacy_model()
 
 def create_wiki_link(text, importance):
     """Create a Wikipedia link with proper styling based on importance."""
-    search_url = f"https://en.wikipedia.org/wiki/{text.replace(' ', '_')}"
-    return f'<a href="{search_url}" data-importance="{importance}">{text}</a>'
+    clean_text = text.strip()
+    search_url = f"https://en.wikipedia.org/wiki/{clean_text.replace(' ', '_')}"
+    return f'<a href="{search_url}" data-importance="{importance}" target="_blank">{clean_text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
@@ -107,23 +108,16 @@ def add_wiki_links(text):
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     text = re.sub(r'\s+', ' ', text)
     
-    # Process each importance level separately and handle nested markers
-    def replace_markers(match, importance):
-        inner_text = match.group(1)
-        # Remove any nested markers before creating the link
-        inner_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', inner_text)
-        return create_wiki_link(inner_text, importance)
+    # Process importance markers with non-greedy matching
+    text = re.sub(r'\[1\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'important'), text)
+    text = re.sub(r'\[2\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'secondary'), text)
+    text = re.sub(r'\[3\]\[([^\]]+?)\]', lambda m: create_wiki_link(m.group(1), 'tertiary'), text)
     
-    # Process from most specific to least specific
-    text = re.sub(r'\[1\]\[([^\]]*?(?:\[[^\]]*\][^\]]*?)*)\]', lambda m: replace_markers(m, 'important'), text)
-    text = re.sub(r'\[2\]\[([^\]]*?(?:\[[^\]]*\][^\]]*?)*)\]', lambda m: replace_markers(m, 'secondary'), text)
-    text = re.sub(r'\[3\]\[([^\]]*?(?:\[[^\]]*\][^\]]*?)*)\]', lambda m: replace_markers(m, 'tertiary'), text)
-    
-    # Clean up any remaining markers
+    # Clean up any remaining markers and whitespace
     text = re.sub(r'\[\d+\]', '', text)
     text = re.sub(r'\s+', ' ', text)
     
-    return f'<div>{text}</div>'
+    return f'<div class="wiki-content">{text}</div>'
 
 def validate_wiki_content(text, title):
     """Validate that the Wikipedia content is relevant to the query."""
