@@ -610,6 +610,11 @@ def get_groq_response(prompt, wiki_content):
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
         
+        # Clean up wiki content
+        wiki_content = re.sub(r'\s*-\s*$', '', wiki_content, flags=re.MULTILINE)  # Remove trailing dashes
+        wiki_content = re.sub(r'\s+-\s+', ' ', wiki_content)  # Remove standalone dashes
+        wiki_content = re.sub(r'\s+', ' ', wiki_content).strip()  # Normalize whitespace
+        
         # Combine wiki content with user's question and conversation context
         full_prompt = f"""Context from Wikipedia: {wiki_content}
 {conversation_context}
@@ -655,6 +660,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
         main_response = re.sub(r'\d\. ', '', main_response)
         main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+        main_response = re.sub(r'\s*-\s*$', '', main_response, flags=re.MULTILINE)  # Remove trailing dashes
+        main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove standalone dashes
         
         # Process the main response
         main_response = re.sub(r'https?://\S+', '', main_response)
