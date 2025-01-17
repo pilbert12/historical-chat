@@ -522,6 +522,44 @@ def get_wikipedia_content(query):
             except Exception as e:
                 continue
         
+        # After collecting articles (right before returning wiki_content)
+        if len(found_articles) >= 200:  # If we've processed 200+ articles
+            search_progress.markdown("📊 Analyzing collected information...")
+            
+            # Prepare analysis prompt
+            analysis_prompt = f"""Based on the Wikipedia content collected about "{query}", analyze:
+
+1. Key themes and patterns
+2. Most frequently mentioned people, events, or concepts
+3. Timeline of events (if applicable)
+4. Contradictions or differing viewpoints (if any)
+5. Gaps in the collected information
+
+Content to analyze:
+{wiki_content}
+
+Provide a structured analysis that will help formulate a comprehensive response."""
+
+            # Get model choice from session state
+            model_choice = st.session_state.get('model_choice', "Groq (Free)")
+            
+            # Get analysis from selected AI model
+            if model_choice == "Deepseek (Requires API Key)":
+                analysis = get_deepseek_response(analysis_prompt, "")
+            else:
+                analysis = get_groq_response(analysis_prompt, "")
+            
+            # Clean up the analysis text
+            clean_analysis = re.sub(r'<[^>]+>', '', analysis)
+            clean_analysis = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_analysis)
+            
+            # Show analysis briefly
+            search_progress.markdown(f"📚 Search Analysis:\n\n{clean_analysis}")
+            time.sleep(5)  # Show analysis for 5 seconds
+            
+            # Add analysis to wiki_content
+            wiki_content.append("\nSearch Analysis:\n" + clean_analysis)
+        
         search_progress.markdown(f"✅ Search complete! Found {len(found_articles)} relevant articles.")
         time.sleep(2)  # Show completion message briefly
         search_progress.empty()  # Clear the progress display
