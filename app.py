@@ -502,13 +502,9 @@ def get_wikipedia_content(query):
                     total_content_found += 1
                     relevant_snippets.append(title)
 
-        # Show more informative completion message
-        if total_content_found > 0:
-            search_progress.markdown(f"""ℹ️ Search complete
-- Found relevant content from {total_content_found} articles""")
-        else:
-            search_progress.markdown(f"""ℹ️ Search complete
-- No exact matches found, gathering contextual information""")
+        # Show search completion message
+        search_progress.markdown(f"""ℹ️ Search complete
+Found content from {total_content_found} articles""")
         
         time.sleep(2)  # Show completion message briefly
         search_progress.empty()  # Clear the progress display
