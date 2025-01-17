@@ -620,13 +620,24 @@ def get_ai_response(prompt, wiki_content):
         main_response = re.sub(r'Follow-up Questions:', '', main_response)
         main_response = re.sub(r'https?://\S+', '', main_response)
         main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-        main_response = re.sub(r'\[\d+\]', '', main_response)  # Remove bracketed numbers
+        
+        # Process importance markers first
+        main_response = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', main_response)
+        main_response = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', main_response)
+        main_response = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', main_response)
+        
+        # Remove any remaining brackets and their contents
+        main_response = re.sub(r'\[[^\]]*\]', '', main_response)  # Remove square brackets and contents
+        main_response = re.sub(r'\([^)]*\)', '', main_response)   # Remove parentheses and contents
+        main_response = re.sub(r'\{[^}]*\}', '', main_response)   # Remove curly braces and contents
+        
+        # Clean up whitespace and dashes
         main_response = re.sub(r'\s*-\s*$', '', main_response)  # Remove trailing dashes
         main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove dashes between words
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
-        # Process the response with importance markers
+        # Process with NLP
         processed_response = process_importance_markers(main_response)
         return processed_response
     except Exception as e:
