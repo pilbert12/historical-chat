@@ -531,15 +531,13 @@ Current Question: {prompt}
 Respond in two parts:
 
 PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts (just wrap the actual term, do not include descriptions like 'major historical figure')
-- [2][term] for dates, places, technical terms (just wrap the actual term, do not include descriptions like 'date and place')
-- [3][term] for related concepts and supporting details (just wrap the actual term, do not include descriptions like 'related concept')
-
-Example: "[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics]."
+- [1][term] for major historical figures, key events, primary concepts
+- [2][term] for dates, places, technical terms
+- [3][term] for related concepts and supporting details
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' or any classification labels in your response."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
 
         try:
             response = requests.post(
@@ -612,11 +610,6 @@ def get_groq_response(prompt, wiki_content):
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
         
-        # Clean up wiki content
-        wiki_content = re.sub(r'\s*-\s*$', '', wiki_content, flags=re.MULTILINE)  # Remove trailing dashes
-        wiki_content = re.sub(r'\s+-\s+', ' ', wiki_content)  # Remove standalone dashes
-        wiki_content = re.sub(r'\s+', ' ', wiki_content).strip()  # Normalize whitespace
-        
         # Combine wiki content with user's question and conversation context
         full_prompt = f"""Context from Wikipedia: {wiki_content}
 {conversation_context}
@@ -625,22 +618,20 @@ Current Question: {prompt}
 Respond in two parts:
 
 PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important terms using these markers:
-- [1][term] for major historical figures, key events, primary concepts (just wrap the actual term, do not include descriptions like 'major historical figure')
-- [2][term] for dates, places, technical terms (just wrap the actual term, do not include descriptions like 'date and place')
-- [3][term] for related concepts and supporting details (just wrap the actual term, do not include descriptions like 'related concept')
-
-Example: "[1][Napoleon Bonaparte] led the [1][French Army] into [2][Russia] in [2][1812], employing [3][scorched earth tactics]."
+- [1][term] for major historical figures, key events, primary concepts
+- [2][term] for dates, places, technical terms
+- [3][term] for related concepts and supporting details
 
 PART 2: Provide three follow-up questions that build upon both the current topic and previous context, each on a new line starting with [SUGGESTION]. Make the questions natural and conversational.
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once. Do not include the word 'term' or any classification labels in your response."""
+Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant terms, and ensure they're marked exactly once."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics. Never include the word 'term' in your responses."
+                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
                 },
                 {
                     "role": "user",
@@ -664,12 +655,6 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
         main_response = re.sub(r'\d\. ', '', main_response)
         main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-        main_response = re.sub(r'\s*-\s*$', '', main_response, flags=re.MULTILINE)  # Remove trailing dashes
-        main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove standalone dashes
-        main_response = re.sub(r'\bterm\b', '', main_response, flags=re.IGNORECASE)  # Remove the word 'term'
-        
-        # Remove classification labels
-        main_response = re.sub(r'\b(major historical figure|key event|date and place|related concept|supporting detail)\b', '', main_response, flags=re.IGNORECASE)
         
         # Process the main response
         main_response = re.sub(r'https?://\S+', '', main_response)
