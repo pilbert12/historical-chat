@@ -447,152 +447,21 @@ Found content from {total_content_found} sources""")
         st.error(f"Error searching Wikipedia: {str(e)}")
         return None
 
-def get_deepseek_response(prompt, wiki_content):
-    """Get response from Deepseek API with follow-up suggestions."""
-    try:
-        # First try to get API key from session state
-        api_key = st.session_state.get('DEEPSEEK_API_KEY')
-        if not api_key:
-            # If not in session state, try to get from secrets
-            try:
-                api_key = st.secrets["DEEPSEEK_API_KEY"]
-            except:
-                return "Please enter your Deepseek API key in the sidebar to continue."
-        
-        headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Build conversation history context
-        conversation_context = ""
-        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
-            conversation_context = "\nPrevious conversation:\n"
-            for msg in recent_messages:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-                conversation_context += f"{role}: {content}\n"
-        
-        # Combine wiki content with user's question and conversation context
-        full_prompt = f"""You are a knowledgeable historical chatbot. Your task is to provide a detailed response using ONLY the Wikipedia content provided below. Do not include any information that is not from these sources.
-
-Wikipedia Content:
-{wiki_content}
-
-Previous Conversation:
-{conversation_context}
-
-Current Question: {prompt}
-
-REQUIREMENTS:
-1. Use ONLY information from the provided Wikipedia content
-2. Mark important terms using these exact markers:
-   - Use [1][term] for major historical figures, key events, and primary concepts
-   - Use [2][term] for dates, places, and technical terms
-   - Use [3][term] for supporting concepts and contextual details
-3. For each fact or claim in your response, mentally note which Wikipedia article or section it came from
-4. End your response with exactly three follow-up questions, each on a new line starting with [SUGGESTION]
-
-Keep your response natural and flowing, without section headers or numbering. Focus on creating a clear hierarchy of information through your term marking."""
-
-        system_prompt = """You are a knowledgeable historical chatbot that provides detailed responses using ONLY the Wikipedia content provided. Focus on historical facts, dates, and concrete developments. Never include metaphorical interpretations or literary references.
-
-Your task is to:
-1. Use ONLY factual information from the provided Wikipedia content
-2. Focus on historical developments, inventions, and concrete events
-3. Avoid metaphors, symbolism, or literary interpretations
-4. Mark important concepts with:
-   - [1][text] for major historical developments, inventions, and key figures
-   - [2][text] for specific dates, places, and technical terms
-   - [3][text] for additional historical context and details (use sparingly)
-
-Keep your response natural and flowing, but always grounded in historical facts."""
-
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": full_prompt
-            }
-        ]
-
-        try:
-            response = requests.post(
-                'https://api.deepseek.com/v1/chat/completions',
-                headers=headers,
-                json={
-                    'model': 'deepseek-chat',
-                    'messages': messages
-                }
-            )
-            response_text = response.json()['choices'][0]['message']['content']
-            
-            # Split response and suggestions
-            parts = response_text.split('\n')
-            main_response = []
-            suggestions = []
-            
-            for part in parts:
-                if part.strip().startswith('[SUGGESTION]'):
-                    suggestions.append(part.replace('[SUGGESTION]', '').strip())
-                else:
-                    main_response.append(part)
-            
-            main_response = ' '.join(main_response).strip()
-            
-            # Store exactly 3 suggestions in session state
-            if 'suggestions' not in st.session_state:
-                st.session_state.suggestions = []
-            st.session_state.suggestions = suggestions[:3]
-            
-            # If we don't have enough suggestions, generate some based on found articles
-            if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
-                article_titles = list(st.session_state['last_wiki_articles'].keys())
-                while len(st.session_state.suggestions) < 3 and article_titles:
-                    title = random.choice(article_titles)
-                    st.session_state.suggestions.append(f"Tell me more about {title}")
-                    article_titles.remove(title)
-            
-            # If still not enough suggestions, add generic ones
-            while len(st.session_state.suggestions) < 3:
-                st.session_state.suggestions.append("What other historical inventions were significant during this period?")
-            
-            # Clean up formatting artifacts
-            main_response = re.sub(r'PART \d:', '', main_response)
-            main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-            main_response = re.sub(r'\d\. ', '', main_response)
-            main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-            
-            # Process URLs
-            main_response = re.sub(r'https?://\S+', '', main_response)
-            main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-            
-            # Process importance markers in main response
-            for level in range(1, 4):
-                main_response = re.sub(
-                    f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: create_wiki_link(m.group(1), 
-                        'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                    main_response
-                )
-            
-            # Remove any remaining instances of the word "term"
-            main_response = re.sub(r'\bterm\b', '', main_response)
-            
-            # Clean up extra spaces and normalize whitespace
-            main_response = re.sub(r'\s+', ' ', main_response)
-            main_response = main_response.strip()
-            
-            return f'<div>{main_response}</div>'
-        except Exception as e:
-            return f"Error communicating with Deepseek API: {str(e)}"
-    except Exception as e:
-        return f"Error communicating with Deepseek API: {str(e)}"
+def process_suggestions(response_text):
+    """Extract and clean up suggestions from the response text."""
+    suggestions = []
+    lines = response_text.split('\n')
+    
+    for line in lines:
+        if line.strip().startswith('[SUGGESTION]'):
+            # Clean up the suggestion text
+            suggestion = line.replace('[SUGGESTION]', '').strip()
+            suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
+            suggestion = re.sub(r'\s+', ' ', suggestion)
+            if suggestion:
+                suggestions.append(suggestion)
+    
+    return suggestions
 
 def get_groq_response(prompt, wiki_content):
     """Get response from Groq API with follow-up suggestions."""
@@ -659,35 +528,32 @@ Keep your response natural and flowing, without section headers or numbering. Fo
         
         response_text = completion.choices[0].message.content.strip()
         
-        # Split response and suggestions
+        # Split response and extract suggestions
         parts = response_text.split('\n')
         main_response = []
-        suggestions = []
-        
         for part in parts:
-            if part.strip().startswith('[SUGGESTION]'):
-                suggestions.append(part.replace('[SUGGESTION]', '').strip())
-            else:
+            if not part.strip().startswith('[SUGGESTION]'):
                 main_response.append(part)
         
         main_response = ' '.join(main_response).strip()
+        suggestions = process_suggestions(response_text)
         
-        # Store exactly 3 suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
+        # Store suggestions in session state
         st.session_state.suggestions = suggestions[:3]
         
         # If we don't have enough suggestions, generate some based on found articles
-        if 'last_wiki_articles' in st.session_state and len(st.session_state.suggestions) < 3:
+        if len(st.session_state.suggestions) < 3 and 'last_wiki_articles' in st.session_state:
             article_titles = list(st.session_state['last_wiki_articles'].keys())
             while len(st.session_state.suggestions) < 3 and article_titles:
                 title = random.choice(article_titles)
-                st.session_state.suggestions.append(f"Tell me more about {title}")
+                suggestion = f"Tell me more about {title}"
+                if suggestion not in st.session_state.suggestions:
+                    st.session_state.suggestions.append(suggestion)
                 article_titles.remove(title)
         
-        # If still not enough suggestions, add generic ones
-        while len(st.session_state.suggestions) < 3:
-            st.session_state.suggestions.append("What other historical inventions were significant during this period?")
+        # If still not enough suggestions, add a generic one
+        if len(st.session_state.suggestions) < 3:
+            st.session_state.suggestions.append("What other historical events were significant during this period?")
         
         # Clean up formatting artifacts
         main_response = re.sub(r'PART \d:', '', main_response)
@@ -916,55 +782,36 @@ def get_audio_base64(text):
         st.error(f"Error generating audio: {str(e)}")
         return None
 
-# Display chat history
-for idx, message in enumerate(st.session_state.messages):
-    with st.chat_message(message["role"]):
-        if message["role"] == "assistant":
-            # Create columns for play button and message
-            cols = st.columns([0.9, 0.1])
-            with cols[1]:
-                if st.button("🔊", key=f"play_{idx}", help="Play audio"):
-                    # Generate and play audio
-                    clean_text = re.sub(r'<[^>]+>', '', message['content'])
-                    clean_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_text)
-                    
-                    # Create audio in memory
-                    mp3_fp = io.BytesIO()
-                    tts = gTTS(text=clean_text, lang='en', tld='co.uk')
-                    tts.write_to_fp(mp3_fp)
-                    mp3_fp.seek(0)
-                    
-                    # Play audio using HTML5 audio
-                    audio_bytes = mp3_fp.read()
-                    st.audio(audio_bytes, format='audio/mp3')
-            
-            with cols[0]:
-                st.markdown(message["content"], unsafe_allow_html=True)
-        else:
+def handle_chat():
+    # Initialize session state
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'suggestions' not in st.session_state:
+        st.session_state.suggestions = []
+
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
             st.markdown(message["content"], unsafe_allow_html=True)
-        
-        # Show suggestion buttons only for the most recent assistant message
-        if (message["role"] == "assistant" and 
-            idx == len(st.session_state.messages) - 1 and 
-            st.session_state.suggestions):
-            cols = st.columns(len(st.session_state.suggestions))
-            for i, (col, suggestion) in enumerate(zip(cols, st.session_state.suggestions)):
-                # Clean up the suggestion text
-                clean_suggestion = suggestion.strip()
-                # Remove importance markers and clean up text
-                clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_suggestion)
-                clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
-                # Use a unique key combining message index and suggestion index
-                button_key = f"suggestion_{idx}_{i}"
-                if col.button(clean_suggestion, key=button_key):
-                    st.session_state.messages.append({"role": "user", "content": clean_suggestion})
-                    wiki_content = get_wikipedia_content(clean_suggestion)
-                    if wiki_content:
-                        response = get_ai_response(clean_suggestion, wiki_content)
-                    else:
-                        response = get_ai_response(clean_suggestion, "No direct Wikipedia article found for this query.")
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    st.rerun()
+            
+            # Only show suggestions after the most recent assistant message
+            if (message["role"] == "assistant" and 
+                message == st.session_state.messages[-1] and 
+                st.session_state.suggestions):
+                
+                # Create columns for suggestions
+                cols = st.columns(3)
+                for idx, suggestion in enumerate(st.session_state.suggestions):
+                    if suggestion:  # Only create button if suggestion exists
+                        if cols[idx].button(
+                            suggestion,
+                            key=f"suggestion_{idx}_{len(st.session_state.messages)}",
+                            use_container_width=True,
+                            type="secondary"
+                        ):
+                            # Handle suggestion click
+                            st.session_state.messages.append({"role": "user", "content": suggestion})
+                            st.rerun()
 
 # Chat input
 if prompt := st.chat_input("What would you like to know about history?"):
