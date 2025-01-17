@@ -587,6 +587,14 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
+        # Clean up formatting artifacts before processing
+        response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', response)  # Remove [1][text] markers
+        response = re.sub(r'\[.*?\]', '', response)  # Remove any remaining brackets
+        response = re.sub(r'\d+\.\s*', '', response)  # Remove numbered lists
+        response = re.sub(r'[{}]', '', response)  # Remove curly braces
+        response = re.sub(r'\s+', ' ', response)  # Normalize whitespace
+        response = response.strip()
+        
         # Process the response with importance markers
         processed_response = process_importance_markers(response)
         return processed_response
@@ -787,9 +795,13 @@ for idx, message in enumerate(st.session_state.messages):
             for i, (col, suggestion) in enumerate(zip(cols, st.session_state.suggestions)):
                 # Clean up the suggestion text
                 clean_suggestion = suggestion.strip()
-                # Remove importance markers and clean up text
+                # Remove all formatting artifacts
                 clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_suggestion)
+                clean_suggestion = re.sub(r'\[.*?\]', '', clean_suggestion)
+                clean_suggestion = re.sub(r'\d+\.\s*', '', clean_suggestion)
+                clean_suggestion = re.sub(r'[{}]', '', clean_suggestion)
                 clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
+                clean_suggestion = clean_suggestion.strip()
                 # Use a unique key combining message index and suggestion index
                 button_key = f"suggestion_{idx}_{i}"
                 if col.button(clean_suggestion, key=button_key):
