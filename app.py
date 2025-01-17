@@ -361,8 +361,41 @@ def get_wikipedia_content(query):
     try:
         # Clean up query and extract key terms
         doc = nlp(query)
+        
+        # Extract dates and years
+        years = set()
+        for ent in doc.ents:
+            if ent.label_ == 'DATE':
+                year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
+                if year_match:
+                    years.add(year_match.group(0))
+        
+        # Build search terms with historical context
         key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
-        search_terms = [query] + key_terms  # Start with full query, then try key terms
+        
+        # If we have a year, prioritize searches with that year
+        search_terms = []
+        if years:
+            for year in years:
+                # Add year-specific search terms
+                search_terms.extend([
+                    f"{year} in history",
+                    f"historical events {year}",
+                    f"{year} history",
+                ])
+                # Combine year with other key terms
+                for term in key_terms:
+                    search_terms.append(f"{term} {year}")
+        
+        # Add general historical search terms
+        search_terms.extend([
+            query + " historical event",
+            query + " in history",
+            query
+        ] + key_terms)
+        
+        # Remove duplicates while preserving order
+        search_terms = list(dict.fromkeys(search_terms))
         
         wiki_content = []
         seen_content = set()
@@ -370,18 +403,60 @@ def get_wikipedia_content(query):
         
         def validate_wiki_content(text, title):
             """Validate that the Wikipedia content is relevant to the query."""
-            # Extract key terms from the content
-            doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
-            content_entities = set([ent.text.lower() for ent in doc.ents])
-            
-            # Calculate relevance score based on key term matches
-            relevance_score = sum(term.lower() in text.lower() for term in key_terms)
-            entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
-            
-            # Content must have either:
-            # 1. Multiple key term matches
-            # 2. At least one key term match and related entities
-            return relevance_score > 1 or (relevance_score > 0 and entity_overlap > 0)
+            try:
+                # Extract key terms from the content
+                doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
+                content_entities = set([ent.text.lower() for ent in doc.ents])
+                
+                # Extract dates and years
+                years = set()
+                for ent in doc.ents:
+                    if ent.label_ == 'DATE':
+                        # Try to extract year from date entity
+                        year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', ent.text)
+                        if year_match:
+                            years.add(year_match.group(0))
+                
+                # If the title contains a year, it must be relevant to our key terms
+                title_year_match = re.search(r'\b1[789]\d{2}\b|\b20\d{2}\b', title)
+                if title_year_match:
+                    title_year = title_year_match.group(0)
+                    # Check if this year is relevant to our query
+                    year_relevance = any(term.lower() in text.lower() for term in key_terms)
+                    if not year_relevance:
+                        return False
+                
+                # Calculate relevance scores
+                term_matches = sum(term.lower() in text.lower() for term in key_terms)
+                entity_overlap = sum(1 for term in key_terms if any(term.lower() in entity for entity in content_entities))
+                
+                # Check for historical context words
+                historical_terms = {'history', 'historical', 'event', 'period', 'era', 'century', 'decade', 'war', 'revolution', 'movement'}
+                historical_context = sum(1 for term in historical_terms if term in text.lower())
+                
+                # Content must meet ALL of these criteria:
+                # 1. Have multiple key term matches OR strong entity overlap
+                # 2. Have historical context if it's not a primary source
+                # 3. Not be about astronomy, physics, or other unrelated scientific topics
+                # 4. If it contains a year, that year must be relevant to the query
+                
+                # Check for scientific/astronomical terms that might indicate irrelevant content
+                scientific_terms = {'galaxy', 'cluster', 'constellation', 'star', 'planet', 'physics', 'quantum', 'chemical', 'molecule'}
+                has_scientific_terms = any(term in text.lower() for term in scientific_terms)
+                
+                # Calculate final relevance
+                is_relevant = (
+                    (term_matches > 1 or (term_matches > 0 and entity_overlap > 0)) and  # Must have good term matching
+                    (historical_context > 0 or 'primary' in str(data.get('relevance', ''))) and  # Must have historical context
+                    not has_scientific_terms and  # Must not be scientific/astronomical
+                    (not title_year_match or year_relevance)  # If it has a year, it must be relevant
+                )
+                
+                return is_relevant
+                
+            except Exception as e:
+                st.error(f"Error validating content: {str(e)}")
+                return False  # Reject content if validation fails
         
         def process_article(title, depth=0, max_depth=2):
             """Process an article and its related links up to max_depth."""
