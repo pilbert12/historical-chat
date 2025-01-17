@@ -101,49 +101,57 @@ def save_conversation():
 
 def login_user(username, password):
     """Login user and return success status."""
-    db = get_db_session()
     try:
-        user = db.query(User).filter(User.username == username).first()
-        if user and user.check_password(password):
-            user.last_login = datetime.utcnow()
-            db.commit()
-            st.session_state.user_id = user.id
-            st.session_state.username = user.username
-            # Load user's API keys
-            if user.deepseek_api_key:
-                st.session_state['DEEPSEEK_API_KEY'] = user.deepseek_api_key
-            if user.groq_api_key:
-                st.session_state['GROQ_API_KEY'] = user.groq_api_key
-            # Load last conversation
-            last_conv = db.query(Conversation).filter(
-                Conversation.user_id == user.id
-            ).order_by(Conversation.updated_at.desc()).first()
-            if last_conv:
-                st.session_state.messages = last_conv.messages or []
-                st.session_state.suggestions = last_conv.suggestions or []
-                st.session_state.current_conversation_id = last_conv.id
-            return True
+        db = get_db_session()
+        try:
+            user = db.query(User).filter(User.username == username).first()
+            if user and user.check_password(password):
+                user.last_login = datetime.utcnow()
+                db.commit()
+                st.session_state.user_id = user.id
+                st.session_state.username = user.username
+                # Load user's API keys
+                if user.deepseek_api_key:
+                    st.session_state['DEEPSEEK_API_KEY'] = user.deepseek_api_key
+                if user.groq_api_key:
+                    st.session_state['GROQ_API_KEY'] = user.groq_api_key
+                # Load last conversation
+                last_conv = db.query(Conversation).filter(
+                    Conversation.user_id == user.id
+                ).order_by(Conversation.updated_at.desc()).first()
+                if last_conv:
+                    st.session_state.messages = last_conv.messages or []
+                    st.session_state.suggestions = last_conv.suggestions or []
+                    st.session_state.current_conversation_id = last_conv.id
+                return True
+            return False
+        finally:
+            db.close()
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
         return False
-    finally:
-        db.close()
 
 def signup_user(username, password):
     """Create new user account and return success status."""
-    db = get_db_session()
     try:
-        if db.query(User).filter(User.username == username).first():
-            return False
-        user = User(username=username)
-        user.set_password(password)
-        db.add(user)
-        db.commit()
-        st.session_state.user_id = user.id
-        st.session_state.username = user.username
-        st.session_state.messages = []
-        st.session_state.current_conversation_id = None
-        return True
-    finally:
-        db.close()
+        db = get_db_session()
+        try:
+            if db.query(User).filter(User.username == username).first():
+                return False
+            user = User(username=username)
+            user.set_password(password)
+            db.add(user)
+            db.commit()
+            st.session_state.user_id = user.id
+            st.session_state.username = user.username
+            st.session_state.messages = []
+            st.session_state.current_conversation_id = None
+            return True
+        finally:
+            db.close()
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return False
 
 def logout_user():
     """Logout user and clear session state."""
