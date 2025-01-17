@@ -567,13 +567,13 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = re.sub(r'\s+', ' ', main_response)
             main_response = main_response.strip()
             
-            # Combine main response with suggestions
-            full_response = main_response
+            # Add suggestions as hidden div
+            suggestions_html = ""
             for suggestion in parts[1:]:
                 if suggestion.strip():
-                    full_response += f"\n[SUGGESTION]{suggestion.strip()}"
+                    suggestions_html += f"[SUGGESTION]{suggestion.strip()}\n"
             
-            return f'<div>{full_response}</div>'
+            return f'<div>{main_response}<div style="display:none">{suggestions_html}</div></div>'
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
@@ -662,13 +662,13 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         main_response = re.sub(r'\s+', ' ', main_response)
         main_response = main_response.strip()
         
-        # Combine main response with suggestions
-        full_response = main_response
+        # Add suggestions as hidden div
+        suggestions_html = ""
         for suggestion in parts[1:]:
             if suggestion.strip():
-                full_response += f"\n[SUGGESTION]{suggestion.strip()}"
+                suggestions_html += f"[SUGGESTION]{suggestion.strip()}\n"
         
-        return f'<div>{full_response}</div>'
+        return f'<div>{main_response}<div style="display:none">{suggestions_html}</div></div>'
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
