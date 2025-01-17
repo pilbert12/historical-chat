@@ -782,6 +782,13 @@ Keep your response natural and flowing, without section headers or numbering. Fo
 def validate_content(prompt, response_text):
     """Validate that the AI response stays on topic and relevant to the prompt."""
     try:
+        # Store original response with formatting
+        original_response = response_text
+        
+        # Clean text only for validation purposes
+        validation_text = re.sub(r'<[^>]+>', '', response_text)
+        validation_text = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', validation_text)
+        
         # Extract key terms from the prompt
         prompt_doc = nlp(prompt)
         prompt_entities = set([ent.text.lower() for ent in prompt_doc.ents])
@@ -793,7 +800,7 @@ def validate_content(prompt, response_text):
         prompt_key_terms.update(historical_terms)
         
         # Extract key terms from the response
-        response_doc = nlp(response_text)
+        response_doc = nlp(validation_text)
         response_entities = set([ent.text.lower() for ent in response_doc.ents])
         
         # Check if the response contains entities not related to the prompt
@@ -845,12 +852,8 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Extract text content from HTML response
-        clean_response = re.sub(r'<[^>]+>', '', response)
-        clean_response = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', clean_response)
-        
         # Validate content
-        is_valid, correction_prompt = validate_content(prompt, clean_response)
+        is_valid, correction_prompt = validate_content(prompt, response)
         
         # If content is not valid, get a new response
         if not is_valid and correction_prompt:
