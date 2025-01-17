@@ -508,6 +508,19 @@ Keep the response natural and flowing, without section headers or numbering. Mar
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
+def get_ai_response(prompt, wiki_content):
+    """Get response from selected AI model with follow-up suggestions."""
+    try:
+        # Get model choice from session state
+        model_choice = st.session_state.get('model_choice', "Groq (Free)")
+        
+        if model_choice == "Deepseek (Requires API Key)":
+            return get_deepseek_response(prompt, wiki_content)
+        else:
+            return get_groq_response(prompt, wiki_content)
+    except Exception as e:
+        return f"Error communicating with AI model: {str(e)}"
+
 # Initialize session state for wiki references if not exists
 if 'wiki_references' not in st.session_state:
     st.session_state.wiki_references = []
@@ -521,6 +534,35 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'suggestions' not in st.session_state:
     st.session_state.suggestions = []
+
+# Sidebar with setup and model selection
+with st.sidebar:
+    st.title("About")
+    st.write("""
+    This Historical Chat Bot combines information from Wikipedia with AI-powered insights 
+    to provide comprehensive answers to your historical questions.
+    
+    Ask any question about history, and I'll provide detailed answers with clickable 
+    Wikipedia links for key people, places, events, and concepts.
+    """)
+    
+    st.title("Setup")
+    st.session_state['model_choice'] = st.selectbox(
+        "Choose AI Model:",
+        ["Groq (Free)", "Deepseek (Requires API Key)"],
+        help="Groq is free to use. Deepseek requires your own API key."
+    )
+    
+    if st.session_state['model_choice'] == "Deepseek (Requires API Key)":
+        api_key = st.text_input("Enter your Deepseek API key:", type="password", help="Your API key will only be stored for this session")
+        if api_key:
+            st.session_state['DEEPSEEK_API_KEY'] = api_key
+            st.success("Deepseek API key saved for this session!")
+    else:
+        api_key = st.text_input("Enter your Groq API key:", type="password", help="Get a free API key from groq.com")
+        if api_key:
+            st.session_state['GROQ_API_KEY'] = api_key
+            st.success("Groq API key saved for this session!")
 
 def get_audio_base64(text):
     """Generate audio from text and return as base64."""
@@ -608,47 +650,4 @@ if prompt := st.chat_input("What would you like to know about history?"):
         response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
-    st.experimental_rerun()
-
-# Move get_ai_response function definition before it's used
-def get_ai_response(prompt, wiki_content):
-    """Get response from selected AI model with follow-up suggestions."""
-    try:
-        # Get model choice from session state
-        model_choice = st.session_state.get('model_choice', "Groq (Free)")
-        
-        if model_choice == "Deepseek (Requires API Key)":
-            return get_deepseek_response(prompt, wiki_content)
-        else:
-            return get_groq_response(prompt, wiki_content)
-    except Exception as e:
-        return f"Error communicating with AI model: {str(e)}"
-
-# Update the sidebar model selection to store choice in session state
-with st.sidebar:
-    st.title("About")
-    st.write("""
-    This Historical Chat Bot combines information from Wikipedia with AI-powered insights 
-    to provide comprehensive answers to your historical questions.
-    
-    Ask any question about history, and I'll provide detailed answers with clickable 
-    Wikipedia links for key people, places, events, and concepts.
-    """)
-    
-    st.title("Setup")
-    st.session_state['model_choice'] = st.selectbox(
-        "Choose AI Model:",
-        ["Groq (Free)", "Deepseek (Requires API Key)"],
-        help="Groq is free to use. Deepseek requires your own API key."
-    )
-    
-    if st.session_state['model_choice'] == "Deepseek (Requires API Key)":
-        api_key = st.text_input("Enter your Deepseek API key:", type="password", help="Your API key will only be stored for this session")
-        if api_key:
-            st.session_state['DEEPSEEK_API_KEY'] = api_key
-            st.success("Deepseek API key saved for this session!")
-    else:
-        api_key = st.text_input("Enter your Groq API key:", type="password", help="Get a free API key from groq.com")
-        if api_key:
-            st.session_state['GROQ_API_KEY'] = api_key
-            st.success("Groq API key saved for this session!") 
+    st.experimental_rerun() 
