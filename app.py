@@ -817,10 +817,9 @@ for idx, message in enumerate(st.session_state.messages):
             with cols[0]:
                 st.markdown(f'<div>{message["content"]}</div>', unsafe_allow_html=True)
                 
-                # Show suggestions directly below the message
-                suggestions = extract_suggestions(message["content"])
-                if suggestions:
-                    for suggestion in suggestions:
+                # Show suggestions if this is the most recent assistant message
+                if idx == len(st.session_state.messages) - 1 and st.session_state.suggestions:
+                    for suggestion in st.session_state.suggestions:
                         # Clean up the suggestion text
                         clean_suggestion = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', suggestion)
                         clean_suggestion = re.sub(r'\s+', ' ', clean_suggestion)
