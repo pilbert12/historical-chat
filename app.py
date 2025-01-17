@@ -62,13 +62,6 @@ def load_conversation(conv_id):
         if conv and conv.user_id == st.session_state.user_id:
             st.session_state.messages = conv.messages or []
             st.session_state.current_conversation_id = conv_id
-            
-            # Extract suggestions from last assistant message
-            if st.session_state.messages:
-                for message in reversed(st.session_state.messages):
-                    if message["role"] == "assistant":
-                        st.session_state.suggestions = extract_suggestions(message["content"])
-                        break
     finally:
         db.close()
 
@@ -77,7 +70,6 @@ def create_new_conversation():
     if st.session_state.messages:
         save_conversation()
     st.session_state.messages = []
-    st.session_state.suggestions = []
     st.session_state.current_conversation_id = None
 
 def save_conversation():
@@ -126,12 +118,6 @@ def login_user(username, password):
             if last_conv:
                 st.session_state.messages = last_conv.messages or []
                 st.session_state.current_conversation_id = last_conv.id
-                # Extract suggestions from last assistant message
-                if st.session_state.messages:
-                    for message in reversed(st.session_state.messages):
-                        if message["role"] == "assistant":
-                            st.session_state.suggestions = extract_suggestions(message["content"])
-                            break
             return True
         return False
     finally:
@@ -493,15 +479,9 @@ def get_ai_response(prompt, wiki_content):
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
         if model_choice == "Deepseek (Requires API Key)":
-            response = get_deepseek_response(prompt, wiki_content)
+            return get_deepseek_response(prompt, wiki_content)
         else:
-            response = get_groq_response(prompt, wiki_content)
-            
-        # Extract suggestions after getting formatted response
-        suggestions = extract_suggestions(response)
-        st.session_state.suggestions = suggestions
-        
-        return response
+            return get_groq_response(prompt, wiki_content)
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
@@ -888,7 +868,5 @@ if prompt := st.chat_input("What would you like to know about history?"):
         response = get_ai_response(prompt, "No direct Wikipedia article found for this query.")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
-    # Extract suggestions from the new response
-    st.session_state.suggestions = extract_suggestions(response)
     save_conversation()  # Save after each message
     st.rerun() 
