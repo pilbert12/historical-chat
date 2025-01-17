@@ -431,11 +431,13 @@ def get_groq_response(prompt, wiki_content):
         if not api_key:
             return "Please enter your Groq API key in the sidebar to continue. You can get a free key from groq.com"
         
-        # Initialize Groq client with proxy settings
+        # Initialize Groq client with proper session configuration
+        session = requests.Session()
+        session.timeout = (10, 30)  # (connect timeout, read timeout)
+        
         client = Groq(
             api_key=api_key,
-            base_url="https://api.groq.com/v1",
-            http_client=requests.Session()
+            base_url="https://api.groq.com/v1"
         )
         
         # Build conversation history context
@@ -467,11 +469,19 @@ Keep the response natural and flowing, without section headers or numbering. Mar
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
-            messages=[{"role": "user", "content": full_prompt}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
+                },
+                {
+                    "role": "user",
+                    "content": full_prompt
+                }
+            ],
             temperature=0.7,
             max_tokens=4096,
-            top_p=1,
-            stream=False
+            top_p=1
         )
         
         response_text = completion.choices[0].message.content
