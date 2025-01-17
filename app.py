@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from gtts import gTTS
 import base64
 import io
-from groq import AsyncGroq
+from groq import Groq
 
 # Add custom CSS for layout and styling
 st.markdown("""
@@ -432,7 +432,7 @@ def get_groq_response(prompt, wiki_content):
             return "Please enter your Groq API key in the sidebar to continue. You can get a free key from groq.com"
         
         # Initialize Groq client
-        client = AsyncGroq(api_key=api_key)
+        client = Groq(api_key=api_key)
         
         # Build conversation history context
         conversation_context = ""
