@@ -519,12 +519,10 @@ def get_deepseek_response(prompt, wiki_content):
         # Build conversation history context
         conversation_context = ""
         if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            # Get last few exchanges, but limit to keep context manageable
-            recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges (3 pairs of messages)
+            recent_messages = st.session_state.messages[-6:]
             conversation_context = "\nPrevious conversation:\n"
             for msg in recent_messages:
                 role = "User" if msg["role"] == "user" else "Assistant"
-                # Clean up any HTML/markdown from previous responses
                 content = re.sub(r'<[^>]+>', '', msg["content"])
                 content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
                 conversation_context += f"{role}: {content}\n"
@@ -571,14 +569,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             main_response = re.sub(r'https?://\S+', '', main_response)
             main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
             
-            # Process importance markers in main response
-            for level in range(1, 4):
-                main_response = re.sub(
-                    f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: create_wiki_link(m.group(1), 
-                        'primary' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
-                    main_response
-                )
+            # Process importance markers
+            main_response = process_importance_markers(main_response)
             
             # Clean up extra spaces and normalize whitespace
             main_response = re.sub(r'\s+', ' ', main_response)
@@ -589,7 +581,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
                 st.session_state.suggestions = []
             st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
             
-            return f'<div>{main_response}</div>'
+            return main_response
         except Exception as e:
             return f"Error communicating with Deepseek API: {str(e)}"
     except Exception as e:
