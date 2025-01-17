@@ -460,7 +460,7 @@ def get_wikipedia_content(query):
         
         def process_article(title, depth=0, max_depth=2):
             """Process an article and its related links up to max_depth."""
-            nonlocal processed_count, relevant_articles_found
+            nonlocal processed_count, relevant_articles_found, key_terms
             
             if not should_continue_search() or depth > max_depth or title in found_articles:
                 return
@@ -481,7 +481,7 @@ def get_wikipedia_content(query):
                 summary = page.summary
                 
                 # Validate summary content
-                if not validate_wiki_content(summary, title):
+                if not validate_wiki_content(summary, title, key_terms):
                     return
                     
                 # Track what content we're using from this article
@@ -504,7 +504,7 @@ def get_wikipedia_content(query):
                     relevant_sections = []
                     for section in sections:
                         section_text = page.section_by_title(section)
-                        if len(section_text) > 100 and validate_wiki_content(section_text, title):
+                        if len(section_text) > 100 and validate_wiki_content(section_text, title, key_terms):
                             relevant_sections.append((section, section_text))
                     
                     # Sort sections by relevance
@@ -793,9 +793,14 @@ Keep your response natural and flowing, without section headers or numbering. Fo
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
-def validate_wiki_content(text, title):
+def validate_wiki_content(text, title, key_terms=None):
     """Validate that the Wikipedia content is relevant to the query."""
     try:
+        # If no key terms provided, extract them from the text
+        if key_terms is None:
+            doc = nlp(text[:1000])
+            key_terms = [ent.text for ent in doc.ents] + [token.text for token in doc if token.pos_ in ['PROPN', 'NOUN']]
+        
         # Extract key terms from the content
         doc = nlp(text[:1000])  # Limit to first 1000 chars for performance
         content_entities = set([ent.text.lower() for ent in doc.ents])
