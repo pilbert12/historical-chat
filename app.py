@@ -369,7 +369,19 @@ def get_wikipedia_content(query):
         # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
-        # Initialize default search terms in case AI generation fails
+        # Check for API key before proceeding
+        if model_choice == "Deepseek (Requires API Key)":
+            api_key = st.session_state.get('DEEPSEEK_API_KEY')
+            if not api_key:
+                st.error("Please enter your Deepseek API key in the sidebar to use AI-powered search.")
+                return None
+        else:  # Groq
+            api_key = st.session_state.get('GROQ_API_KEY')
+            if not api_key:
+                st.error("Please enter your Groq API key in the sidebar to use AI-powered search.")
+                return None
+        
+        # Initialize default search terms as fallback
         default_search_terms = [
             query,  # Exact query
             query + " history",  # Historical context
@@ -378,14 +390,19 @@ def get_wikipedia_content(query):
         ]
         default_search_terms = [term for term in default_search_terms if term]  # Remove empty terms
         
+        # Try to get AI-generated search terms
         try:
-            # Set timeout for AI response
-            with st.spinner("Generating search strategy..."):
-                search_terms = get_ai_search_terms(query, model_choice)
-                if not search_terms:
-                    raise Exception("Failed to generate AI search terms")
+            search_progress.markdown("🧠 Generating intelligent search strategy...")
+            search_terms = get_ai_search_terms(query, model_choice)
+            
+            if not search_terms:
+                search_progress.warning("AI search term generation failed, using fallback strategy...")
+                search_terms = default_search_terms
+            else:
+                search_progress.success(f"Generated {len(search_terms)} search terms")
+                
         except Exception as e:
-            st.warning("Using fallback search strategy...")
+            search_progress.warning(f"Error generating search terms: {str(e)}\nUsing fallback strategy...")
             search_terms = default_search_terms
         
         # Initialize tracking variables
@@ -421,11 +438,12 @@ def get_wikipedia_content(query):
             try:
                 # Get initial search results with timeout
                 search_results = wikipedia.search(term, results=10)
+                term_start_time = time.time()
                 
                 # For each potential article
                 for title in search_results:
                     # Check per-term timeout (30 seconds)
-                    if time.time() - current_time > 30:
+                    if time.time() - term_start_time > 30:
                         break
                         
                     processed_count += 1
