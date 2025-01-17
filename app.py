@@ -559,7 +559,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
             for level in range(1, 4):
                 main_response = re.sub(
                     f'\\[{level}\\]\\[([^\\]]+)\\]',
-                    lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{"primary" if level == 1 else "secondary" if level == 2 else "tertiary"}">{m.group(1)}</a>',
+                    lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance=\'{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}\'>{m.group(1)}</a>',
                     main_response
                 )
             
@@ -651,7 +651,7 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         for level in range(1, 4):
             main_response = re.sub(
                 f'\\[{level}\\]\\[([^\\]]+)\\]',
-                lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance="{"primary" if level == 1 else "secondary" if level == 2 else "tertiary"}">{m.group(1)}</a>',
+                lambda m: f'<a href="https://en.wikipedia.org/w/index.php?search={m.group(1).replace(" ", "+")}" data-importance=\'{("primary" if level == 1 else "secondary" if level == 2 else "tertiary")}\'>{m.group(1)}</a>',
                 main_response
             )
         
