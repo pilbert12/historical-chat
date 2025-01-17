@@ -24,7 +24,7 @@ st.set_page_config(page_title="Historical Chat Bot", page_icon="📚")
 st.markdown("""
 <style>
     /* Link styling */
-    .element-container div.stMarkdown a {
+    .stMarkdown a {
         color: inherit !important;
         text-decoration: none !important;
         cursor: pointer;
@@ -32,47 +32,25 @@ st.markdown("""
     }
     
     /* Importance-based text styling */
-    .element-container div.stMarkdown a[data-importance="important"] {
+    .stMarkdown a[data-importance="important"] {
         color: rgba(255, 255, 255, 0.95) !important;
         font-weight: 500;
     }
     
-    .element-container div.stMarkdown a[data-importance="secondary"] {
+    .stMarkdown a[data-importance="secondary"] {
         color: rgba(255, 255, 255, 0.85) !important;
     }
     
-    .element-container div.stMarkdown a[data-importance="tertiary"] {
+    .stMarkdown a[data-importance="tertiary"] {
         color: rgba(255, 255, 255, 0.75) !important;
     }
     
     /* Subtle hover effect for links */
-    .element-container div.stMarkdown a:hover {
+    .stMarkdown a:hover {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
         padding: 2px 4px;
         margin: -2px -4px;
-    }
-    
-    /* Chat message styling */
-    .element-container.st-emotion-cache-* {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1rem;
-        margin: 1rem 0;
-        transition: all 0.2s ease-in-out;
-    }
-    
-    .element-container.st-emotion-cache-*:hover {
-        background: rgba(255, 255, 255, 0.07);
-        border-color: rgba(255, 255, 255, 0.15);
-    }
-    
-    /* Base text style */
-    .element-container.st-emotion-cache-* div.stMarkdown {
-        color: rgba(250, 250, 250, 0.6) !important;
-        line-height: 1.6;
-        max-width: 100% !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -100,8 +78,10 @@ nlp = load_spacy_model()
 def create_wiki_link(text, importance):
     """Create a Wikipedia link with proper styling based on importance."""
     clean_text = text.strip()
-    search_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(clean_text.replace(' ', '_'))}"
-    return f'<a href="{search_url}" data-importance="{importance}" target="_blank" rel="noopener noreferrer" onclick="window.open(\'{search_url}\', \'_blank\')" style="color: inherit !important; text-decoration: none !important;">{clean_text}</a>'
+    # Use full Wikipedia URL and properly encode the title
+    wiki_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(clean_text.replace(' ', '_'))}"
+    # Use JavaScript window.open to handle the link click
+    return f'<a href="{wiki_url}" data-importance="{importance}" target="_blank" onclick="window.open(this.href, \'_blank\'); return false;">{clean_text}</a>'
 
 def add_wiki_links(text):
     """Process text and add Wikipedia links with importance-based styling."""
