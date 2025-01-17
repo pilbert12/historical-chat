@@ -53,6 +53,11 @@ def get_user_conversations():
     finally:
         db.close()
 
+def extract_suggestions(message_content):
+    """Extract suggestions from an assistant message."""
+    parts = message_content.split('[SUGGESTION]')
+    return [s.strip() for s in parts[1:] if s.strip()]
+
 def load_conversation(conv_id):
     """Load a specific conversation."""
     db = get_db_session()
@@ -61,7 +66,13 @@ def load_conversation(conv_id):
         if conv and conv.user_id == st.session_state.user_id:
             st.session_state.messages = conv.messages or []
             st.session_state.current_conversation_id = conv_id
-            st.session_state.suggestions = []
+            
+            # Extract suggestions from last assistant message
+            if st.session_state.messages:
+                for message in reversed(st.session_state.messages):
+                    if message["role"] == "assistant":
+                        st.session_state.suggestions = extract_suggestions(message["content"])
+                        break
     finally:
         db.close()
 
@@ -119,6 +130,12 @@ def login_user(username, password):
             if last_conv:
                 st.session_state.messages = last_conv.messages or []
                 st.session_state.current_conversation_id = last_conv.id
+                # Extract suggestions from last assistant message
+                if st.session_state.messages:
+                    for message in reversed(st.session_state.messages):
+                        if message["role"] == "assistant":
+                            st.session_state.suggestions = extract_suggestions(message["content"])
+                            break
             return True
         return False
     finally:
