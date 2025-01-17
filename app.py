@@ -336,7 +336,7 @@ FORMAT YOUR RESPONSE:
 3. End with three follow-up questions, each on a new line starting with [SUGGESTION]"""
 
         completion = client.chat.completions.create(
-            model="mixtral-8x7b-32768",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
