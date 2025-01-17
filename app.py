@@ -549,12 +549,46 @@ Keep your response natural and flowing, without section headers or numbering."""
             top_p=1
         )
         
-        response = completion.choices[0].message.content
+        response_text = completion.choices[0].message.content.strip()
         
-        # Extract suggestions from the response
-        extract_suggestions(response)
+        # Extract suggestions before processing the response
+        extract_suggestions(response_text)
         
-        return response
+        # Split response and remove suggestion lines
+        main_response = []
+        for line in response_text.split('\n'):
+            if not line.strip().startswith('[SUGGESTION]'):
+                main_response.append(line)
+        
+        main_response = ' '.join(main_response).strip()
+        
+        # Clean up formatting artifacts
+        main_response = re.sub(r'PART \d:', '', main_response)
+        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+        main_response = re.sub(r'\d\. ', '', main_response)
+        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+        
+        # Process URLs
+        main_response = re.sub(r'https?://\S+', '', main_response)
+        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        
+        # Process importance markers in main response
+        for level in range(1, 4):
+            main_response = re.sub(
+                f'\\[{level}\\]\\[([^\\]]+)\\]',
+                lambda m: create_wiki_link(m.group(1), 
+                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                main_response
+            )
+        
+        # Remove any remaining instances of the word "term"
+        main_response = re.sub(r'\bterm\b', '', main_response)
+        
+        # Clean up extra spaces and normalize whitespace
+        main_response = re.sub(r'\s+', ' ', main_response)
+        main_response = main_response.strip()
+        
+        return f'<div>{main_response}</div>'
         
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
@@ -602,12 +636,46 @@ Your follow-up questions must:
 
 Keep your response natural and flowing, without section headers or numbering."""
         
-        response = client.get_chat_response(full_prompt, system_prompt)
+        response_text = client.get_chat_response(full_prompt, system_prompt)
         
-        # Extract suggestions from the response
-        extract_suggestions(response)
+        # Extract suggestions before processing the response
+        extract_suggestions(response_text)
         
-        return response
+        # Split response and remove suggestion lines
+        main_response = []
+        for line in response_text.split('\n'):
+            if not line.strip().startswith('[SUGGESTION]'):
+                main_response.append(line)
+        
+        main_response = ' '.join(main_response).strip()
+        
+        # Clean up formatting artifacts
+        main_response = re.sub(r'PART \d:', '', main_response)
+        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
+        main_response = re.sub(r'\d\. ', '', main_response)
+        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
+        
+        # Process URLs
+        main_response = re.sub(r'https?://\S+', '', main_response)
+        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        
+        # Process importance markers in main response
+        for level in range(1, 4):
+            main_response = re.sub(
+                f'\\[{level}\\]\\[([^\\]]+)\\]',
+                lambda m: create_wiki_link(m.group(1), 
+                    'important' if level == 1 else 'secondary' if level == 2 else 'tertiary'),
+                main_response
+            )
+        
+        # Remove any remaining instances of the word "term"
+        main_response = re.sub(r'\bterm\b', '', main_response)
+        
+        # Clean up extra spaces and normalize whitespace
+        main_response = re.sub(r'\s+', ' ', main_response)
+        main_response = main_response.strip()
+        
+        return f'<div>{main_response}</div>'
         
     except Exception as e:
         return f"Error communicating with Deepseek API: {str(e)}"
