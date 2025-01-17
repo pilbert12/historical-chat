@@ -27,6 +27,18 @@ if 'suggestions' not in st.session_state:
 if 'wiki_references' not in st.session_state:
     st.session_state.wiki_references = []
 
+def process_importance_markers(text):
+    """Process text and add visual hierarchy through styling."""
+    # Clean up any existing formatting
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Process importance markers
+    text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
+    text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
+    text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
+    
+    return f'<div>{text}</div>'
+
 def save_api_keys():
     """Save API keys to user's profile."""
     if st.session_state.user_id:
@@ -912,15 +924,3 @@ if prompt := st.chat_input("What would you like to know about history?"):
     st.session_state.messages.append({"role": "assistant", "content": response})
     save_conversation()  # Save after each message
     st.rerun() 
-
-def process_importance_markers(text):
-    """Process text and add visual hierarchy through styling."""
-    # Clean up any existing formatting
-    text = re.sub(r'<[^>]+>', '', text)
-    
-    # Process importance markers
-    text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
-    text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
-    text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
-    
-    return f'<div>{text}</div>' 
