@@ -613,14 +613,9 @@ Keep the response natural and flowing, without section headers or numbering."""
         # Split response and suggestions
         parts = response_text.split('[SUGGESTION]')
         main_response = parts[0].strip()
-        suggestions = [s.strip() for s in parts[1:] if s.strip()]
         
-        # Store suggestions in session state
-        if 'suggestions' not in st.session_state:
-            st.session_state.suggestions = []
-        st.session_state.suggestions = [s.strip() for s in suggestions[:3]]
-        
-        return main_response
+        # Return the full response with suggestions
+        return response_text
     except Exception as e:
         return f"Error communicating with Groq API: {str(e)}"
 
@@ -642,12 +637,9 @@ def get_ai_response(prompt, wiki_content):
         parts = response.split('[SUGGESTION]')
         main_response = parts[0].strip()
         
-        # Only store new suggestions if this wasn't a follow-up question
+        # Store suggestions if this wasn't a follow-up question
         if not is_followup and len(parts) > 1:
-            suggestions = [s.strip() for s in parts[1:] if s.strip()]
-            st.session_state.suggestions = suggestions[:3]
-        else:
-            st.session_state.suggestions = []  # Clear suggestions for follow-up questions
+            st.session_state.suggestions = [s.strip() for s in parts[1:] if s.strip()][:3]
         
         # Process the response with NLP-based importance first
         processed_response = process_text_importance(main_response)
