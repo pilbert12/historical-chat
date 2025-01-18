@@ -36,6 +36,8 @@ def process_text_importance(text):
     text = re.sub(r'(\d+)\s*(st|nd|rd|th)\s*', r'\1\2 ', text)  # Fix ordinal spacing
     text = re.sub(r'(\d+)([A-Za-z])', r'\1 \2', text)  # Add space between numbers and letters
     text = re.sub(r'([A-Za-z])(\d+)', r'\1 \2', text)  # Add space between letters and numbers
+    text = re.sub(r'\*\*\s*\*\*', '', text)  # Remove empty bold markers
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove existing bold markers
     
     try:
         doc = nlp(text)
@@ -47,9 +49,10 @@ def process_text_importance(text):
         for ent in doc.ents:
             if ent.text not in processed_terms and len(ent.text.strip()) > 0:
                 if ent.label_ in ['DATE', 'TIME', 'EVENT']:
-                    text = re.sub(rf'\b{re.escape(ent.text)}\b', f'**{ent.text}**', text)
+                    # Use HTML span instead of markdown for dates
+                    text = re.sub(rf'\b{re.escape(ent.text)}\b', f'<span class="primary-term">{ent.text}</span>', text)
                 elif ent.label_ in ['PERSON', 'GPE', 'LOC', 'ORG']:
-                    text = re.sub(rf'\b{re.escape(ent.text)}\b', f'_{ent.text}_', text)
+                    text = re.sub(rf'\b{re.escape(ent.text)}\b', f'<span class="secondary-term">{ent.text}</span>', text)
                 processed_terms.add(ent.text)
         
         # Second pass: Important historical concepts and terms
@@ -62,15 +65,13 @@ def process_text_importance(text):
         
         for concept in historical_concepts:
             if concept.lower() in text.lower() and concept not in processed_terms:
-                text = re.sub(rf'\b{re.escape(concept)}\b', f'`{concept}`', text, flags=re.IGNORECASE)
+                text = re.sub(rf'\b{re.escape(concept)}\b', f'<span class="tertiary-term">{concept}</span>', text, flags=re.IGNORECASE)
                 processed_terms.add(concept)
         
         # Clean up any empty markup that might have been generated
-        text = re.sub(r'`\s*`', '', text)  # Remove empty backticks
-        text = re.sub(r'\*\*\s*\*\*', '', text)  # Remove empty bold
-        text = re.sub(r'_\s*_', '', text)  # Remove empty italics
+        text = re.sub(r'<span[^>]*>\s*</span>', '', text)  # Remove empty spans
         
-        return text
+        return f'<div>{text}</div>'
     except Exception as e:
         st.error(f"Error processing text: {str(e)}")
         return text  # Return unprocessed text if there's an error
