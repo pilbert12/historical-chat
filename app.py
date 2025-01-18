@@ -27,54 +27,53 @@ if 'suggestions' not in st.session_state:
 if 'wiki_references' not in st.session_state:
     st.session_state.wiki_references = []
 
-def process_importance_markers(text):
-    """Process text and add visual hierarchy through styling."""
-    # First process any existing importance markers
-    text = re.sub(r'\[1\]\[([^\]]+)\]', r'<span class="primary-term">\1</span>', text)
-    text = re.sub(r'\[2\]\[([^\]]+)\]', r'<span class="secondary-term">\1</span>', text)
-    text = re.sub(r'\[3\]\[([^\]]+)\]', r'<span class="tertiary-term">\1</span>', text)
-    
-    # Clean up any remaining formatting
-    text = re.sub(r'<[^>]+>', '', text)
-    text = re.sub(r'\[\d+\]', '', text)  # Remove any remaining bracketed numbers
-    text = re.sub(r'\s*-\s*$', '', text)  # Remove trailing dashes
-    text = re.sub(r'\s+-\s+', ' ', text)  # Remove dashes between words
-    
-    # Load spacy model for NLP processing
-    nlp = spacy.load('en_core_web_sm')
-    
-    # Process the text with spaCy
-    doc = nlp(text)
-    
-    # Process each token based on its type
-    processed_text = []
-    for token in doc:
-        # Skip tokens that are already styled
-        if token.text.startswith('<span'):
-            processed_text.append(token.text)
-            continue
-            
-        # Primary terms: Proper nouns, dates, locations
-        if (token.pos_ == 'PROPN' or 
-            token.ent_type_ in ['DATE', 'GPE', 'LOC', 'PERSON']):
-            processed_text.append(f'<span class="primary-term">{token.text}</span>')
+def process_text_importance(text):
+    """Process text and add visual hierarchy using NLP."""
+    if nlp is None:
+        return text  # Return unprocessed text if NLP isn't available
         
-        # Secondary terms: Regular nouns, verbs, adjectives
-        elif token.pos_ in ['NOUN', 'VERB', 'ADJ']:
-            processed_text.append(f'<span class="secondary-term">{token.text}</span>')
+    # First clean up any formatting artifacts and ensure proper spacing
+    text = re.sub(r'(\d+)\s*(st|nd|rd|th)\s*', r'\1\2 ', text)  # Fix ordinal spacing
+    text = re.sub(r'(\d+)([A-Za-z])', r'\1 \2', text)  # Add space between numbers and letters
+    text = re.sub(r'([A-Za-z])(\d+)', r'\1 \2', text)  # Add space between letters and numbers
+    
+    try:
+        doc = nlp(text)
         
-        # Tertiary terms: Everything else (including pronouns)
-        else:
-            processed_text.append(f'<span class="tertiary-term">{token.text}</span>')
-    
-    # Join the tokens back together
-    result = ' '.join(processed_text)
-    
-    # Clean up extra whitespace
-    result = re.sub(r'\s+', ' ', result)
-    result = result.strip()
-    
-    return f'<div>{result}</div>'
+        # Track processed terms to avoid duplicates
+        processed_terms = set()
+        
+        # First pass: Named entities and important historical concepts
+        for ent in doc.ents:
+            if ent.text not in processed_terms and len(ent.text.strip()) > 0:
+                if ent.label_ in ['DATE', 'TIME', 'EVENT']:
+                    text = re.sub(rf'\b{re.escape(ent.text)}\b', f'**{ent.text}**', text)
+                elif ent.label_ in ['PERSON', 'GPE', 'LOC', 'ORG']:
+                    text = re.sub(rf'\b{re.escape(ent.text)}\b', f'_{ent.text}_', text)
+                processed_terms.add(ent.text)
+        
+        # Second pass: Important historical concepts and terms
+        historical_concepts = [
+            'American imperialism', 'indigenous communities', 'cultural erasure',
+            'self-determination', 'political representation', 'traditional ways',
+            'ancestral territories', 'power imbalances', 'cultural autonomy',
+            'discriminatory policies', 'political participation'
+        ]
+        
+        for concept in historical_concepts:
+            if concept.lower() in text.lower() and concept not in processed_terms:
+                text = re.sub(rf'\b{re.escape(concept)}\b', f'`{concept}`', text, flags=re.IGNORECASE)
+                processed_terms.add(concept)
+        
+        # Clean up any empty markup that might have been generated
+        text = re.sub(r'`\s*`', '', text)  # Remove empty backticks
+        text = re.sub(r'\*\*\s*\*\*', '', text)  # Remove empty bold
+        text = re.sub(r'_\s*_', '', text)  # Remove empty italics
+        
+        return text
+    except Exception as e:
+        st.error(f"Error processing text: {str(e)}")
+        return text  # Return unprocessed text if there's an error
 
 def save_api_keys():
     """Save API keys to user's profile."""
@@ -231,54 +230,66 @@ st.markdown("""
     /* Base text style */
     .stChatMessage div.stMarkdown {
         line-height: 1.8;
-        font-size: 1.05rem;
-        letter-spacing: 0.2px;
+        font-size: 1.1rem;
+        max-width: 80ch;
+        margin: 0 auto;
     }
     
-    /* Importance-based text styling */
-    .primary-term {
-        opacity: 0.95;
-        font-weight: 600;
-        letter-spacing: 0.3px;
+    /* Primary terms (bold) */
+    .stChatMessage div.stMarkdown strong {
+        color: rgba(255, 255, 255, 1);
+        font-weight: 500;
+        font-size: inherit;
     }
     
-    .secondary-term {
-        opacity: 0.75;
-        font-weight: 400;
+    /* Secondary terms (emphasis) */
+    .stChatMessage div.stMarkdown em {
+        color: rgba(255, 255, 255, 0.75);
+        font-style: normal;
+        font-size: inherit;
     }
     
-    .tertiary-term {
-        opacity: 0.5;
-        font-weight: 300;
+    /* Tertiary terms (code) */
+    .stChatMessage div.stMarkdown code {
+        color: rgba(255, 255, 255, 0.55);
+        font-style: normal;
+        background: none;
+        font-family: inherit;
+        font-size: inherit;
+        padding: 0;
     }
     
     /* Chat message container */
     .stChatMessage {
-        border-radius: 16px;
-        padding: 1.75rem;
-        margin: 1rem 0;
-        transition: all 0.2s ease-in-out;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        background: rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Paragraph spacing */
+    .stChatMessage .stMarkdown p {
+        margin-bottom: 1.5rem;
     }
     
     /* Follow-up questions section */
-    .stChatMessage .stMarkdown p {
-        margin-bottom: 1.25rem;
-    }
-    
     .stChatMessage hr {
-        margin: 2rem 0 1.5rem;
+        margin: 2rem 0;
+        opacity: 0.2;
     }
     
     /* Buttons styling */
     div[data-testid="column"] button {
-        min-height: unset;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 0.75rem 1.25rem;
-        width: auto !important;
-        flex: 1;
+        margin: 0.5rem 0;
         border-radius: 8px;
-        font-size: 0.95rem;
-        line-height: 1.4;
-        text-align: center;
+        transition: all 0.2s ease;
+    }
+    
+    div[data-testid="column"] button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -292,15 +303,20 @@ wiki = wikipediaapi.Wikipedia('HistoricalChatBot/1.0 (your@email.com)',
                             extract_format=wikipediaapi.ExtractFormat.WIKI)
 
 # Load spaCy model
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_spacy_model():
+    """Load spaCy model with error handling and download if needed."""
     try:
         return spacy.load('en_core_web_sm')
-    except:
-        # Download if not available
-        os.system('python -m spacy download en_core_web_sm')
+    except OSError:
+        # If model isn't found, download it
+        spacy.cli.download('en_core_web_sm')
         return spacy.load('en_core_web_sm')
+    except Exception as e:
+        st.error(f"Error loading spaCy model: {str(e)}")
+        return None
 
+# Initialize NLP
 nlp = load_spacy_model()
 
 def create_wiki_link(text, importance='supporting'):
@@ -416,7 +432,6 @@ def get_deepseek_response(prompt, wiki_content):
         # First try to get API key from session state
         api_key = st.session_state.get('DEEPSEEK_API_KEY')
         if not api_key:
-            # If not in session state, try to get from secrets
             try:
                 api_key = st.secrets["DEEPSEEK_API_KEY"]
             except:
@@ -427,35 +442,48 @@ def get_deepseek_response(prompt, wiki_content):
             'Content-Type': 'application/json'
         }
         
-        # Build conversation history context
+        # Build conversation history context only if there are previous messages
         conversation_context = ""
-        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
-            conversation_context = "\nPrevious conversation:\n"
-            for msg in recent_messages:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-                conversation_context += f"{role}: {content}\n"
+        if 'messages' in st.session_state and len(st.session_state.messages) > 1:
+            recent_messages = st.session_state.messages[-6:-1]
+            if recent_messages:
+                conversation_context = "\nPrevious conversation:\n"
+                for msg in recent_messages:
+                    role = "User" if msg["role"] == "user" else "Assistant"
+                    content = re.sub(r'<[^>]+>', '', msg["content"])
+                    content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
+                    conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
         full_prompt = f"""Context from Wikipedia: {wiki_content}
-{conversation_context}
-Current Question: {prompt}
+{conversation_context}Current Question: {prompt}
 
-Respond in two parts:
+You are a knowledgeable historical expert. Provide a coherent, well-structured response that:
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important elements using these markers:
-- [1][text] for major historical figures, key events, primary concepts (e.g., [1][World War II])
-- [2][text] for dates, places, technical terms (e.g., [2][1945])
-- [3][text] for related concepts and supporting details (e.g., [3][Allied Powers])
+1. Introduces the main topic clearly with specific dates
+2. Develops ideas in a logical sequence
+3. Uses clear transitions between related concepts
+4. Explains cause-and-effect relationships
+5. Provides proper context for all historical terms and events
 
-PART 2: Provide three specific follow-up questions that probe deeper into different aspects of the topic. Each question should be clear and focused on historical facts. Start each on a new line with [SUGGESTION]. Examples:
-- "What military tactics did Napoleon use at the Battle of Waterloo?"
-- "How did the Industrial Revolution change living conditions in European cities?"
-- "What were the key terms of the Treaty of Versailles?"
+Critical requirements:
+- ALWAYS begin with a complete date in the first sentence
+- NEVER omit years when referencing dates
+- ALWAYS include the full year when concluding
+- Maintain specific dates throughout the entire response
+- Double-check that no dates are missing before completing the response
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant elements, and ensure they're marked exactly once."""
+Important guidelines:
+- Start with a clear introduction of the main topic
+- Develop one idea fully before moving to the next
+- Use clear transition phrases between ideas
+- Explain terms and concepts before using them
+- Keep sentences focused and avoid run-on structures
+- End with a clear conclusion that includes the specific year
+
+Then provide three follow-up questions that probe deeper into different aspects of the topic. Format each as a complete question without colons. Start each with [SUGGESTION].
+
+Keep the response natural and flowing, without section headers or numbering."""
 
         try:
             response = requests.post(
@@ -508,42 +536,51 @@ def get_groq_response(prompt, wiki_content):
         # Initialize Groq client
         client = Groq(api_key=api_key)
         
-        # Build conversation history context
+        # Build conversation history context only if there are previous messages
         conversation_context = ""
-        if 'messages' in st.session_state and len(st.session_state.messages) > 0:
-            recent_messages = st.session_state.messages[-6:]
-            conversation_context = "\nPrevious conversation:\n"
-            for msg in recent_messages:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                content = re.sub(r'<[^>]+>', '', msg["content"])
-                content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
-                conversation_context += f"{role}: {content}\n"
+        if 'messages' in st.session_state and len(st.session_state.messages) > 1:
+            recent_messages = st.session_state.messages[-6:-1]
+            if recent_messages:
+                conversation_context = "\nPrevious conversation:\n"
+                for msg in recent_messages:
+                    role = "User" if msg["role"] == "user" else "Assistant"
+                    content = re.sub(r'<[^>]+>', '', msg["content"])
+                    content = re.sub(r'\[(\d)\]\[([^\]]+)\]', r'\2', content)
+                    conversation_context += f"{role}: {content}\n"
         
         # Combine wiki content with user's question and conversation context
         full_prompt = f"""Context from Wikipedia: {wiki_content}
-{conversation_context}
-Current Question: {prompt}
+{conversation_context}Current Question: {prompt}
 
-Respond in two parts:
+You are a knowledgeable historical expert. Provide a coherent, well-structured response that:
 
-PART 1: Provide a detailed response about the topic that takes into account the previous conversation context when relevant. Mark important elements using these markers:
-- [1][text] for major historical figures, key events, primary concepts (e.g., [1][World War II])
-- [2][text] for dates, places, technical terms (e.g., [2][1945])
-- [3][text] for related concepts and supporting details (e.g., [3][Allied Powers])
+1. Introduces the main topic clearly
+2. Develops ideas in a logical sequence
+3. Uses clear transitions between related concepts
+4. Explains cause-and-effect relationships
+5. Provides proper context for all historical terms and events
 
-PART 2: Provide three specific follow-up questions that probe deeper into different aspects of the topic. Each question should be clear and focused on historical facts. Start each on a new line with [SUGGESTION]. Examples:
-- "What military tactics did Napoleon use at the Battle of Waterloo?"
-- "How did the Industrial Revolution change living conditions in European cities?"
-- "What were the key terms of the Treaty of Versailles?"
+Important guidelines:
+- Start with a clear introduction of the main topic
+- Develop one idea fully before moving to the next
+- Use clear transition phrases between ideas
+- Explain terms and concepts before using them
+- Keep sentences focused and avoid run-on structures
+- End with a clear conclusion
+- ALWAYS include complete dates with years (e.g., "3000 BCE" not just "BCE")
+- Ensure dates are specific and accurate, not vague ranges
+- When mentioning a date, always include the complete year
 
-Keep the response natural and flowing, without section headers or numbering. Mark only the most relevant elements, and ensure they're marked exactly once."""
+Then provide three follow-up questions that probe deeper into different aspects of the topic. Format each as a complete question without colons. Start each with [SUGGESTION].
+
+Keep the response natural and flowing, without section headers or numbering."""
 
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a knowledgeable historical chatbot that provides detailed, accurate responses about historical topics."
+                    "content": "You are a knowledgeable historical expert who provides clear, coherent responses with accurate dates and proper marking of important terms."
                 },
                 {
                     "role": "user",
@@ -586,9 +623,8 @@ Keep the response natural and flowing, without section headers or numbering. Mar
         return f"Error communicating with Groq API: {str(e)}"
 
 def get_ai_response(prompt, wiki_content):
-    """Get response from selected AI model with follow-up suggestions."""
+    """Get response from selected AI model."""
     try:
-        # Get model choice from session state
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
         # Get raw response from selected model
@@ -597,36 +633,20 @@ def get_ai_response(prompt, wiki_content):
         else:
             response = get_groq_response(prompt, wiki_content)
         
-        # Split response and suggestions if needed
+        # Split response and suggestions
         parts = response.split('[SUGGESTION]')
         main_response = parts[0].strip()
         
-        # Store suggestions in session state
+        # Store suggestions
         if len(parts) > 1:
             suggestions = [s.strip() for s in parts[1:] if s.strip()]
             st.session_state.suggestions = suggestions[:3]
         
-        # Clean up formatting artifacts
-        main_response = re.sub(r'PART \d:', '', main_response)
-        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-        main_response = re.sub(r'Follow-up Questions:', '', main_response)
-        main_response = re.sub(r'https?://\S+', '', main_response)
-        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
+        # Process the response with NLP-based importance
+        processed_response = process_text_importance(main_response)
         
-        # Remove any remaining brackets and their contents (except importance markers)
-        main_response = re.sub(r'\[(?!\d\])\[?[^\]]*\]', '', main_response)  # Remove non-importance brackets
-        main_response = re.sub(r'\([^)]*\)', '', main_response)   # Remove parentheses and contents
-        main_response = re.sub(r'\{[^}]*\}', '', main_response)   # Remove curly braces and contents
-        
-        # Clean up whitespace and dashes
-        main_response = re.sub(r'\s*-\s*$', '', main_response)  # Remove trailing dashes
-        main_response = re.sub(r'\s+-\s+', ' ', main_response)  # Remove dashes between words
-        main_response = re.sub(r'\s+', ' ', main_response)
-        main_response = main_response.strip()
-        
-        # Process with NLP
-        processed_response = process_importance_markers(main_response)
         return processed_response
+        
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
 
