@@ -33,10 +33,11 @@ def process_text_importance(text):
         return text  # Return unprocessed text if NLP isn't available
         
     # First clean up any formatting artifacts and ensure proper spacing
-    text = re.sub(r'(\d+)\s*(st|nd|rd|th)\s*', r'\1\2 ', text)  # Fix ordinal spacing
+    text = re.sub(r'(\d+)\s*-\s*(st|nd|rd|th)', r'\1\2', text)  # Remove spaces in ordinals with dashes
+    text = re.sub(r'(\d+)\s+(st|nd|rd|th)', r'\1\2', text)  # Remove spaces in ordinals
     
-    # Add spaces between numbers and letters
-    text = re.sub(r'(\d+)([A-Za-z])', r'\1 \2', text)  # Add space between numbers and letters
+    # Add spaces between numbers and letters (except for ordinals)
+    text = re.sub(r'(\d+)(?!(st|nd|rd|th))([A-Za-z])', r'\1 \2', text)  # Add space between numbers and letters
     text = re.sub(r'([A-Za-z])(\d+)', r'\1 \2', text)  # Add space between letters and numbers
     
     # Remove any existing markdown formatting
