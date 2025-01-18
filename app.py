@@ -35,10 +35,6 @@ def process_text_importance(text):
     # First clean up any formatting artifacts and ensure proper spacing
     text = re.sub(r'(\d+)\s*(st|nd|rd|th)\s*', r'\1\2 ', text)  # Fix ordinal spacing
     
-    # Fix truncated years at end of sentences
-    text = re.sub(r'(\d{2,3})(?=\s*[.!?]|\s*$)', r'\1\1', text)  # Duplicate last digits for truncated years
-    text = re.sub(r'(\d{4})(\d{4})', r'\1', text)  # Clean up any double years created
-    
     # Add spaces between numbers and letters
     text = re.sub(r'(\d+)([A-Za-z])', r'\1 \2', text)  # Add space between numbers and letters
     text = re.sub(r'([A-Za-z])(\d+)', r'\1 \2', text)  # Add space between letters and numbers
