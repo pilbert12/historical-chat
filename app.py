@@ -629,6 +629,9 @@ def get_ai_response(prompt, wiki_content):
     try:
         model_choice = st.session_state.get('model_choice', "Groq (Free)")
         
+        # Check if this is a follow-up question
+        is_followup = prompt in st.session_state.get('suggestions', [])
+        
         # Get raw response from selected model
         if model_choice == "Deepseek (Requires API Key)":
             response = get_deepseek_response(prompt, wiki_content)
@@ -639,10 +642,12 @@ def get_ai_response(prompt, wiki_content):
         parts = response.split('[SUGGESTION]')
         main_response = parts[0].strip()
         
-        # Store suggestions
-        if len(parts) > 1:
+        # Only store new suggestions if this wasn't a follow-up question
+        if not is_followup and len(parts) > 1:
             suggestions = [s.strip() for s in parts[1:] if s.strip()]
             st.session_state.suggestions = suggestions[:3]
+        else:
+            st.session_state.suggestions = []  # Clear suggestions for follow-up questions
         
         # Process the response with NLP-based importance first
         processed_response = process_text_importance(main_response)
