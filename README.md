@@ -2,6 +2,8 @@
 
 An AI-powered chat interface that combines Wikipedia knowledge with advanced language models to provide comprehensive answers to historical questions.
 
+Go to historical-chat.streamlit.app to use the free webhosted app.
+
 ## Features
 
 ### Core Functionality
@@ -30,7 +32,7 @@ An AI-powered chat interface that combines Wikipedia knowledge with advanced lan
 - **Security**: bcrypt for password hashing
 - **Dependencies**: Python 3.7+, see requirements.txt
 
-## Setup
+## Local Setup
 
 1. Clone this repository
 2. Create and activate a virtual environment:
