@@ -34,8 +34,16 @@ def process_text_importance(text):
         
     # First clean up any formatting artifacts and ensure proper spacing
     text = re.sub(r'(\d+)\s*(st|nd|rd|th)\s*', r'\1\2 ', text)  # Fix ordinal spacing
+    
+    # Fix truncated years at end of sentences
+    text = re.sub(r'(\d{2,3})(?=\s*[.!?]|\s*$)', r'\1\1', text)  # Duplicate last digits for truncated years
+    text = re.sub(r'(\d{4})(\d{4})', r'\1', text)  # Clean up any double years created
+    
+    # Add spaces between numbers and letters
     text = re.sub(r'(\d+)([A-Za-z])', r'\1 \2', text)  # Add space between numbers and letters
     text = re.sub(r'([A-Za-z])(\d+)', r'\1 \2', text)  # Add space between letters and numbers
+    
+    # Remove any existing markdown formatting
     text = re.sub(r'\*\*\s*\*\*', '', text)  # Remove empty bold markers
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove existing bold markers
     
@@ -559,11 +567,18 @@ def get_groq_response(prompt, wiki_content):
 
 You are a knowledgeable historical expert. Provide a coherent, well-structured response that:
 
-1. Introduces the main topic clearly
+1. Introduces the main topic clearly with specific dates
 2. Develops ideas in a logical sequence
 3. Uses clear transitions between related concepts
 4. Explains cause-and-effect relationships
 5. Provides proper context for all historical terms and events
+
+Critical requirements:
+- ALWAYS begin with a complete date in the first sentence
+- NEVER omit years when referencing dates
+- ALWAYS include the full year when concluding
+- Maintain specific dates throughout the entire response
+- Double-check that no dates are missing before completing the response
 
 Important guidelines:
 - Start with a clear introduction of the main topic
@@ -571,15 +586,13 @@ Important guidelines:
 - Use clear transition phrases between ideas
 - Explain terms and concepts before using them
 - Keep sentences focused and avoid run-on structures
-- End with a clear conclusion
-- ALWAYS include complete dates with years (e.g., "3000 BCE" not just "BCE")
-- Ensure dates are specific and accurate, not vague ranges
-- When mentioning a date, always include the complete year
+- End with a clear conclusion that includes the specific year
 
 Then provide three follow-up questions that probe deeper into different aspects of the topic. Format each as a complete question without colons. Start each with [SUGGESTION].
 
 Keep the response natural and flowing, without section headers or numbering."""
-
+        
+        # Get raw response from API
         completion = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
@@ -597,26 +610,13 @@ Keep the response natural and flowing, without section headers or numbering."""
             top_p=1
         )
         
+        # Get raw response text
         response_text = completion.choices[0].message.content.strip()
         
         # Split response and suggestions
         parts = response_text.split('[SUGGESTION]')
         main_response = parts[0].strip()
         suggestions = [s.strip() for s in parts[1:] if s.strip()]
-        
-        # Clean up formatting artifacts
-        main_response = re.sub(r'PART \d:', '', main_response)
-        main_response = re.sub(r'\*\*.*?\*\*', '', main_response)
-        main_response = re.sub(r'\d\. ', '', main_response)
-        main_response = re.sub(r'Follow-Up Questions:', '', main_response)
-        
-        # Process the main response
-        main_response = re.sub(r'https?://\S+', '', main_response)
-        main_response = re.sub(r'\(https?://[^)]+\)', '', main_response)
-        
-        # Clean up extra spaces and normalize whitespace
-        main_response = re.sub(r'\s+', ' ', main_response)
-        main_response = main_response.strip()
         
         # Store suggestions in session state
         if 'suggestions' not in st.session_state:
@@ -647,10 +647,19 @@ def get_ai_response(prompt, wiki_content):
             suggestions = [s.strip() for s in parts[1:] if s.strip()]
             st.session_state.suggestions = suggestions[:3]
         
-        # Process the response with NLP-based importance
+        # Process the response with NLP-based importance first
         processed_response = process_text_importance(main_response)
         
-        return processed_response
+        # Then clean up any remaining formatting artifacts
+        processed_response = re.sub(r'PART \d:', '', processed_response)
+        processed_response = re.sub(r'\*\*.*?\*\*', '', processed_response)
+        processed_response = re.sub(r'\d\. ', '', processed_response)
+        processed_response = re.sub(r'Follow-Up Questions:', '', processed_response)
+        processed_response = re.sub(r'https?://\S+', '', processed_response)
+        processed_response = re.sub(r'\(https?://[^)]+\)', '', processed_response)
+        processed_response = re.sub(r'\s+', ' ', processed_response)
+        
+        return processed_response.strip()
         
     except Exception as e:
         return f"Error communicating with AI model: {str(e)}"
