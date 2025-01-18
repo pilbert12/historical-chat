@@ -107,8 +107,12 @@ def load_conversation(conv_id):
     try:
         conv = db.query(Conversation).get(conv_id)
         if conv and conv.user_id == st.session_state.user_id:
-            st.session_state.messages = conv.messages or []
+            # Ensure messages are in the correct order (oldest to newest)
+            messages = conv.messages or []
+            st.session_state.messages = messages
             st.session_state.current_conversation_id = conv_id
+            st.session_state.suggestions = []
+            # Clear any existing suggestions since we're loading a new conversation
             st.session_state.suggestions = []
     finally:
         db.close()
@@ -701,11 +705,14 @@ with st.sidebar:
         if conversations:
             st.write("Previous Conversations:")
             for conv in conversations:
-                # Get the first message as the title, or use a default
+                # Get the most recent message as the title, or use a default
                 title = "Empty Conversation"
                 if conv.messages and len(conv.messages) > 0:
-                    first_msg = conv.messages[0]["content"]
-                    title = first_msg[:50] + "..." if len(first_msg) > 50 else first_msg
+                    last_msg = conv.messages[-1]["content"]  # Get last message instead of first
+                    # Clean up the title text
+                    last_msg = re.sub(r'<[^>]+>', '', last_msg)  # Remove HTML tags
+                    last_msg = re.sub(r'\[\d+\]\[([^\]]+)\]', r'\1', last_msg)  # Remove importance markers
+                    title = last_msg[:50] + "..." if len(last_msg) > 50 else last_msg
                 
                 col1, col2, col3 = st.columns([0.6, 0.2, 0.2])
                 with col1:
